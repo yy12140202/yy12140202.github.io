@@ -965,13 +965,25 @@ body[data-act="3"] .confetti{ opacity:1; }
 body[data-free="1"] .slot.has-img[data-key="phone"],
 body[data-free="1"] .slot.has-img[data-key="drawer"],
 body[data-free="1"] .slot.has-img[data-key="frame"],
+body[data-free="1"] .slot.has-img[data-key="album"],
 body[data-free="1"] .shot{
   cursor:pointer;
 }
 body[data-free="1"] .slot[data-key="phone"]:active,
 body[data-free="1"] .slot[data-key="drawer"]:active,
-body[data-free="1"] .slot[data-key="frame"]:active{
+body[data-free="1"] .slot[data-key="frame"]:active,
+body[data-free="1"] .slot[data-key="album"]:active{
   transform:scale(.985);
+}
+
+/* 相册是实拍的白色本子，压一点亮、补一层影，才不像贴上去的 */
+.slot.has-img[data-key="album"] img{
+  filter:brightness(.62) saturate(.86)
+         drop-shadow(0 calc(var(--u)*2) calc(var(--u)*5) rgba(0,0,0,.55));
+}
+body[data-free="1"] .slot.has-img[data-key="album"] img{
+  filter:brightness(.86) saturate(.92)
+         drop-shadow(0 calc(var(--u)*2) calc(var(--u)*5) rgba(0,0,0,.55));
 }
 
 /* 第四幕的提示：出现一次就淡掉 */
@@ -1354,6 +1366,7 @@ const CONFIG = {
     cup:      'assets/cup.png',
     headphone:'assets/headphone.png',
     candy:    'assets/candy.png',
+    album:    'assets/album.webp',
   },
   tapHint: '轻点这个本子',
 
@@ -1393,10 +1406,9 @@ const CONFIG = {
     {
       cls: 'ph',
       x: 8, y: 14, w: 52, h: 70, rot: -5,
-      title: '你的相册',
-      img: 'assets/album-shot.jpg',
-      body: ['就是这个本子，', '里面一格一格，都留给同一个人。'],
-      sign: '一格一张',
+      title: '一叠洗出来的照片',
+      body: ['同一张洗了两遍，', '因为那天的光太好了。'],
+      sign: '舍不得扔',
     },
     {
       cls: 'box',
@@ -1423,7 +1435,8 @@ const LAYOUT = {
   phone:    { x: 46,  y: 452, w: 52,  h: 192, rot: -8,   cls: 'phone',     label: '手机',  layer: 'props' },
   envelope: { x: 258, y: 448, w: 112, h: 72,  rot: 5,    cls: 'envelope',  label: '信封',  layer: 'props' },
   letter:   { ...CONFIG.letter,                           cls: 'letter',    label: '',      layer: 'props' },
-  headphone:{ x: 286, y: 640, w: 58,  h: 40,  rot: -8,   cls: 'headphone', label: '耳机',  layer: 'props' },
+  album:    { x: 254, y: 560, w: 74,  h: 87,  rot: 5,    cls: 'album',     label: '',      layer: 'props' },
+  headphone:{ x: 306, y: 656, w: 54,  h: 38,  rot: -8,   cls: 'headphone', label: '耳机',  layer: 'props' },
   candy:    { x: 34,  y: 672, w: 19,  h: 19,  rot: 12,   cls: 'candy',     label: '',      layer: 'props' },
   frame:    { x: 40,  y: 700, w: 96,  h: 122, rot: -3.5, cls: 'frame',     label: '',      layer: 'props' },
   drawer:   { x: 210, y: 700, w: 172, h: 116, rot: 0,    cls: 'drawer',    label: '抽屉',  layer: 'props' },
@@ -1611,9 +1624,9 @@ for (const [cls, x, y] of [['s1', 222, 690], ['s2', 228, 694]]) {
 
 /* 便签 ×3：位置刻意不对称，压着桌沿和抽屉边 */
 const NOTES = [
-  { x: 300, y: 566, w: 66, h: 66, rot: 7 },
+  { x: 318, y: 522, w: 56, h: 56, rot: 7 },
   { x: 160, y: 726, w: 58, h: 58, rot: -8 },
-  { x: 356, y: 612, w: 50, h: 50, rot: -4 },
+  { x: 352, y: 596, w: 50, h: 50, rot: -4 },
 ];
 for (const n of NOTES) {
   const el = document.createElement('div');
@@ -2174,6 +2187,12 @@ slotOf('frame').addEventListener('click', (e) => {
   e.stopPropagation();
   if (!document.body.dataset.free) return;
   showNote('这个相框还是空的', ['一直想放一张你的照片，', '但每一张都觉得不够好。', '等哪天你挑一张给我。'], '');
+});
+
+/* 相册：点开就是那 16 张照片，从第一张开始翻 */
+slotOf('album').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (document.body.dataset.free) openLb(0);
 });
 
 /* 照片墙：编号 01–16 对应 CONFIG.photos 的下标 */
