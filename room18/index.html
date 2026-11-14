@@ -142,27 +142,31 @@ body[data-scene="wide"] .cam-wide{
 body[data-scene="wide"] .cam-room{ opacity:0; pointer-events:none; }
 body[data-scene="wide"] .cam-room,
 body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, ease); }
-/* 宽景里那本小本子：站在镜子前 */
-/* 整间房那一层里，几张机位慢慢淡切（缓慢漂移） */
+/* 宽景：整张图完整显示（contain），四周用同一张图虚化补满，画面不再被拉糊 */
 .wide-shot{
   position:absolute; inset:0;
   opacity:0;
-  transition:opacity 3400ms ease;
+  transition:opacity 520ms ease;
 }
 .wide-shot.on{ opacity:1; }
 .wide-shot img:first-child{
   width:100%; height:100%;
   object-fit:cover;
   display:block;
-  transform-origin:50% 55%;
-  animation:driftPan 26s ease-in-out infinite alternate;
 }
-@keyframes driftPan{
-  from{ transform:scale(1.02) translate3d(0,0,0); }
-  to{ transform:scale(1.075) translate3d(-1.2%,-0.9%,0); }
+/* 整间房时四周的补底：同一张图放大虚化 */
+.wide-bg{
+  position:absolute; inset:0; z-index:1;
+  background:url(assets/room-wide.jpg) center/cover no-repeat;
+  filter:blur(30px) brightness(.40) saturate(1.06);
+  transform:scale(1.12);
+  opacity:0;
+  transition:opacity 900ms var(--ease-soft, ease);
+  pointer-events:none;
 }
-/* 墙上挂的两张真照片：按照片里相框的位置、角度摆，带框带影 */
-.wall-pic{
+body[data-scene="wide"] .wide-bg{ opacity:1; }
+
+/* 墙上挂的两张真照片：按照片里相框的位置、角度摆，带框带影 */.wall-pic{
   position:absolute;
   display:block;
   object-fit:cover;
@@ -177,7 +181,7 @@ body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, eas
   transform-origin:50% 50%;
 }
 #pic-bed{ left:642px; top:438px; width:36px; height:79px; transform:rotate(-4deg); border-width:0; border-radius:0; box-shadow:0 2px 6px rgba(0,0,0,.55), inset 0 0 8px rgba(90,60,30,.3); }
-#pic-out{ left:204px; top:476px; width:50px; height:62px; transform:rotate(-1.2deg); border-width:3px; border-color:rgba(250,241,226,.95); }
+#pic-out{ left:198px; top:462px; width:84px; height:106px; transform:rotate(-1.6deg); border-width:4px; border-color:rgba(252,245,232,.96); }
 
 /* 自己选视角的三颗小按钮 */
 .views{
@@ -1170,6 +1174,9 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
     <div class="night-tip">轻点任意处</div>
   </div>
 
+  <!-- 整间房时四周的补底：同一张图放大虚化，避免上下出现硬边 -->
+  <div class="wide-bg" id="wide-bg"></div>
+
   <!-- 实景房间：整张照片就是舞台，桌面物件用 3D 矩阵贴在照片的木柜台上 -->
   <div class="camera cam-room" id="cam-room">
     <img class="photo" id="photo" src="assets/room.jpg" alt="" draggable="false">
@@ -1626,8 +1633,10 @@ let igLetter = null;
 {
   const shots = Array.from(document.querySelectorAll('.wide-shot'));
   const btns = Array.from(document.querySelectorAll('.view'));
+  const bg = document.getElementById('wide-bg');
   const show = (i) => {
     shots.forEach((s, k) => s.classList.toggle('on', k === i));
+    if (bg) bg.style.backgroundImage = 'url(assets/' + (['room-wide.jpg','room-wide-2.jpg','room-wide-3.jpg'][i]) + ')';
     btns.forEach((b, k) => b.classList.toggle('on', k === i));
   };
   btns.forEach((b) => b.addEventListener('click', () => show(+b.dataset.shot)));
@@ -1842,7 +1851,7 @@ function applyCamera(zoom) {
   }
 }
 
-/* 整间房那一层：864×1152 的照片按 cover 铺满窗口 */
+/* 整间房那一层：864×1152 的照片整张显示（contain），四周用同一张虚化补满 */
 const WIDE = CONFIG.wide || { size: [864, 1152] };
 function applyWide() {
   const el = document.getElementById('cam-wide');
@@ -1853,6 +1862,8 @@ function applyWide() {
   const tx = (vw - ww * s) / 2;
   const ty = (vh - wh * s) / 2;
   el.style.transform = `translate3d(${tx.toFixed(1)}px, ${ty.toFixed(1)}px, 0) scale(${s.toFixed(4)})`;
+  el.style.setProperty('--wide-top', ty.toFixed(1) + 'px');
+  el.style.setProperty('--wide-h', (wh * s).toFixed(1) + 'px');
 }
 
 /* 起手：镜头先怼在柜台上；转屏/改窗口大小时重算（第三幕之后就是整间房） */
