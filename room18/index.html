@@ -1,0 +1,2233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#080605" />
+<title>最后一间房</title>
+<style>
+/* ==========================================================================
+   0. 基础变量
+   --------------------------------------------------------------------------
+   --u   : 设计单位。整间房按 390×844 的设计稿等比缩放。
+   --dim : 暗场强度（第一幕 1 = 没开灯）。
+   台灯系统四个变量（--lamp-*）在第一、二幕恒为 0，第三幕开灯时才推开。
+   ========================================================================== */
+:root{
+  --u: calc(100vw / 390);
+  --ink:#080605;
+
+  /* 暖木色 / 米白 / 奶油 / 暗金 */
+  --wood:#3a2718;
+  --wood-2:#2a1a10;
+  --cream:#f3e7cf;
+  --cream-2:#e6d4b4;
+  --gold:#c9a26a;
+
+  --dim: 1;
+  --letter: 1;
+
+  --lamp-core: 0;
+  --lamp-cone: 0;
+  --lamp-pool: 0;
+  --lamp-halo: 0;
+  --lamp-fog: 0;
+
+  --ease-out: cubic-bezier(.22,.61,.36,1);
+
+  /* 纸纤维 / 墙面颗粒（内联 SVG 噪点，只做纹理，不做图形） */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html,body{ height:100%; margin:0; }
+
+body{
+  background:
+    radial-gradient(120% 90% at 50% 58%, #12100e 0%, #0a0807 55%, #050404 100%);
+  overflow:hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+               "Microsoft YaHei", system-ui, sans-serif;
+  color:#e9dcc4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   1. 舞台
+   --------------------------------------------------------------------------
+   手机端满屏；电脑端居中成一扇 480px 宽的窗，四周是房间外的黑。
+   ========================================================================== */
+.stage{
+  position:fixed; left:0; right:0; top:0;
+  height:100vh;
+  height:100dvh;      /* 手机上地址栏收起/展开都不会把房间顶出画面 */
+  display:grid; place-items:center;
+}
+
+.room{
+  position:relative;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  isolation:isolate;
+  background:#0a0706;
+}
+
+@media (min-width:760px){
+  /* 电脑端：按屏幕高度算 u，尽量让整间房立起来，宽度封顶 520px */
+  :root{ --u: calc(min(520px, 100vh * 390 / 844) / 390); }
+  .room{
+    width:min(520px, calc(100vh * 390 / 844));
+    height:min(calc(520px * 844 / 390), 100vh);
+    border-radius:2px;
+    box-shadow:
+      0 0 calc(var(--u)*40) rgba(255,170,90,.05),
+      0 calc(var(--u)*30) calc(var(--u)*90) rgba(0,0,0,.75);
+  }
+}
+
+/* ==========================================================================
+   2. 墙面：远处渐暗偏暖棕 + 颗粒 + 顶部更暗
+   ========================================================================== */
+.wall{
+  position:absolute; inset:0;
+  z-index:10;
+  background:
+    linear-gradient(180deg,
+      #120c09 0%,
+      #1b120d 22%,
+      #261a13 48%,
+      #2e211a 66%,
+      #33241a 100%);
+}
+
+/* 墙面受光不均：右上有一点极淡的冷色回落，避免整面墙死平 */
+.wall::before{
+  content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(80% 55% at 78% 8%, rgba(120,140,170,.07), transparent 60%),
+    radial-gradient(90% 60% at 12% 78%, rgba(255,180,110,.05), transparent 65%);
+}
+
+/* 颗粒：整块拉伸，避免平铺接缝 */
+.wall::after{
+  content:""; position:absolute; inset:0;
+  background-image:var(--grain);
+  background-size:100% 100%;
+  opacity:.06;
+  mix-blend-mode:overlay;
+}
+
+/* 踢脚线：交代墙与桌的交接，房间才有“高度” */
+.baseboard{
+  position:absolute; left:0; right:0; top:51%; z-index:11;
+  height:calc(var(--u)*7);
+  transform:translateY(calc(var(--u)*-7));
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.55), rgba(58,40,26,.5) 55%, rgba(0,0,0,.35));
+  box-shadow:inset 0 calc(var(--u)*1) 0 rgba(255,226,190,.10);
+  opacity:.55;
+}
+
+/* 墙上挂钩的影子：不承载信息，只交代“有人住过” */
+.hook{
+  position:absolute; z-index:10;
+  left:78%; top:34%;
+  width:calc(var(--u)*10); height:calc(var(--u)*26);
+  background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.05));
+  border-radius:2px;
+  filter:blur(calc(var(--u)*1.2));
+  opacity:.5;
+}
+.hook::after{
+  content:""; position:absolute; left:calc(var(--u)*-4); top:calc(var(--u)*24);
+  width:calc(var(--u)*18); height:calc(var(--u)*10);
+  background:radial-gradient(closest-side, rgba(0,0,0,.28), transparent 70%);
+  border-radius:50%;
+}
+
+/* 暗角：把画面往里收 */
+.vignette{
+  position:absolute; inset:0; z-index:36; pointer-events:none;
+  background:
+    radial-gradient(115% 88% at 50% 52%,
+      transparent 38%,
+      rgba(0,0,0,.14) 66%,
+      rgba(0,0,0,.34) 88%,
+      rgba(0,0,0,.46) 100%);
+}
+
+/* ==========================================================================
+   3. 照片墙：16 个相框，疏密不均、±2~4° 微旋
+   （相框外形等 PNG 素材；此处为统一占位：色块 + 标签）
+   ========================================================================== */
+.wallshots{ position:absolute; inset:0; z-index:12; }
+
+.shot{
+  position:absolute;
+  border-radius:calc(var(--u)*2);
+  background:
+    linear-gradient(150deg, #6d5a44 0%, #4c3d2c 45%, #382c20 100%);
+  box-shadow:
+    inset 0 calc(var(--u)*1) 0 rgba(255,240,215,.16),
+    inset 0 calc(var(--u)*-1) 0 rgba(0,0,0,.35),
+    0 calc(var(--u)*2) calc(var(--u)*4) rgba(0,0,0,.55),
+    0 calc(var(--u)*6) calc(var(--u)*14) rgba(0,0,0,.35);
+  /* 第三幕之前：只有隐约轮廓 */
+  filter:brightness(.82) saturate(.95);
+  opacity:.42;
+  transition:opacity 700ms var(--ease-out), filter 700ms var(--ease-out);
+}
+
+/* 相框内那张“照片”的占位 */
+.shot::after{
+  content:attr(data-label);
+  position:absolute; inset:calc(var(--u)*4);
+  border-radius:calc(var(--u)*1);
+  display:flex; align-items:center; justify-content:center;
+  font-size:calc(var(--u)*7);
+  letter-spacing:.02em;
+  color:rgba(255,246,228,.32);
+  background:
+    linear-gradient(160deg, rgba(255,240,215,.14), rgba(255,235,205,.05) 55%, rgba(0,0,0,.18));
+}
+
+/* ==========================================================================
+   4. 桌面：木纹 + 桌沿受光 + 前后明暗
+   ========================================================================== */
+.desk{
+  position:absolute; left:0; right:0; top:51%; bottom:0;
+  z-index:20;
+  background:
+    /* 靠近台灯处亮、远处暗 */
+    radial-gradient(78% 62% at 22% 12%, #5b4229 0%, #46311f 38%, #33231a 66%, #241811 100%),
+    linear-gradient(180deg, #3a2718, #241811);
+}
+
+/* 木纹：细线 + 大尺度木理，靠得很近的四层细线会变成“格纸”，所以刻意降对比 */
+.desk::before{
+  content:""; position:absolute; inset:0;
+  background-image:
+    repeating-linear-gradient(91.6deg, rgba(255,225,180,.028) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(88.4deg, rgba(0,0,0,.10) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(90.3deg, rgba(255,210,160,.03) 0 1px, transparent 1px 79px),
+    radial-gradient(120% 60% at 30% 0%, rgba(255,214,164,.10), transparent 70%),
+    radial-gradient(90% 40% at 80% 30%, rgba(0,0,0,.28), transparent 70%);
+  opacity:.9;
+}
+.desk::after{
+  content:""; position:absolute; inset:0;
+  background-image:var(--grain);
+  background-size:100% 100%;
+  opacity:.08; mix-blend-mode:overlay;
+}
+
+/* 桌沿：一条薄薄的受光边 + 下方一道投影，交代桌板的厚度与纵深 */
+.desk-edge{
+  position:absolute; left:0; right:0; top:51%; z-index:20;
+  height:calc(var(--u)*3);
+  transform:translateY(calc(var(--u)*-1.5));
+  background:linear-gradient(180deg, rgba(255,226,180,.34), rgba(255,200,140,.06));
+  filter:blur(calc(var(--u)*.6));
+}
+.desk-shadow{
+  position:absolute; left:0; right:0; top:51%; z-index:21;
+  height:calc(var(--u)*16);
+  background:linear-gradient(180deg, rgba(0,0,0,.55), transparent);
+  pointer-events:none;
+}
+
+/* ==========================================================================
+   5. 物件层
+   --------------------------------------------------------------------------
+   所有物件都是「槽位」：位置/尺寸来自 JS 的 LAYOUT（设计稿 px），
+   外观来自各自的 class。素材（PNG）到位后只换 src，版式不动。
+   占位样式：柔和圆角 + 受光边 + 软投影 + 右下角小标签。
+   ========================================================================== */
+.props{ position:absolute; inset:0; z-index:30; pointer-events:none; }
+/* 只有具体物件接收点击，层本身不挡照片墙 */
+.slot{ pointer-events:auto; }
+/* 前景层只是虚化的装饰（杯子），不能挡住底座上的点击 */
+.props-fg{ pointer-events:none; }
+
+.slot{
+  position:absolute;
+  transform-origin:50% 60%;
+  /* 每个物件统一的光照语言：左上受光、右下投影 */
+  border-radius:calc(var(--u)*5);
+  background:linear-gradient(150deg, #7d6446 0%, #5d4832 42%, #443322 100%);
+  box-shadow:
+    inset calc(var(--u)*1.5) calc(var(--u)*1.5) calc(var(--u)*2) rgba(255,236,205,.22),
+    inset calc(var(--u)*-1) calc(var(--u)*-1) calc(var(--u)*3) rgba(0,0,0,.35),
+    calc(var(--u)*1) calc(var(--u)*2) calc(var(--u)*4) rgba(0,0,0,.55),
+    calc(var(--u)*4) calc(var(--u)*12) calc(var(--u)*26) rgba(0,0,0,.42);
+}
+
+/* 物件上的素材图（有素材时显示，占位时隐藏） */
+.slot img{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:contain;
+  display:none;
+  pointer-events:none;
+  filter:drop-shadow(calc(var(--u)*1) calc(var(--u)*2) calc(var(--u)*3) rgba(0,0,0,.5));
+}
+.slot.has-img{ background:none !important; box-shadow:none !important; }
+.slot.has-img img{ display:block; position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+.slot.lamp .lamp-on{ opacity:var(--lamp-core); transition:opacity 220ms var(--ease-out); }
+
+/* 占位标签：只作为验收提示，压得很淡 */
+.slot::after{
+  content:attr(data-label);
+  position:absolute; left:0; right:0; bottom:6%;
+  text-align:center;
+  font-size:calc(var(--u)*7);
+  color:rgba(255,244,222,.22);
+  letter-spacing:.14em;
+}
+.slot.has-img::after{ content:""; }
+
+/* 物件分级：靠近灯的一组略亮、远处略暗（第三幕开灯后生效） */
+.near, .far, .props-fg{ transition:filter 900ms var(--ease-out); }
+.near{ filter:brightness(1.02) saturate(1.04); }
+.far{ filter:brightness(.86) saturate(.94); }
+
+/* 前景：虚化 + 放大，制造第三层纵深 */
+.props-fg{ z-index:32; }
+.props-fg .slot{ filter:blur(calc(var(--u)*6)) brightness(.62); pointer-events:none; }
+
+/* ---- 台灯（占位：灯灭时只是一团虚的暗影，等 PNG 到位再换真形）---- */
+.slot.lamp:not(.has-img){
+  border-radius:46% 46% 34% 34%;
+  background:radial-gradient(110% 80% at 50% 26%,
+    rgba(18,12,9,.62) 0%,
+    rgba(10,7,5,.40) 62%,
+    rgba(8,6,4,.12) 100%);
+  filter:blur(calc(var(--u)*7));
+}
+.slot.lamp::after{ content:""; }
+/* 灯灭时的灯罩内沿：一点极弱的反光，让轮廓能读出来 */
+.slot.lamp::before{
+  content:""; position:absolute; left:12%; right:12%; top:3%;
+  height:calc(var(--u)*9);
+  border-radius:50%;
+  background:radial-gradient(closest-side, rgba(255,214,160,.12), transparent 75%);
+  opacity:calc(.4 + var(--lamp-core) * 2);
+  filter:blur(calc(var(--u)*2));
+}
+
+/* ---- 信纸 ---- */
+.slot.letter{
+  border-radius:calc(var(--u)*2.5);
+  background:
+    linear-gradient(168deg, #f7ecd6 0%, #eddcbd 46%, #ddc79f 100%);
+  box-shadow:
+    inset calc(var(--u)*1) calc(var(--u)*1) calc(var(--u)*2) rgba(255,255,250,.42),
+    calc(var(--u)*1) calc(var(--u)*2) calc(var(--u)*3) rgba(0,0,0,.45),
+    calc(var(--u)*3) calc(var(--u)*10) calc(var(--u)*22) rgba(0,0,0,.35);
+}
+/* 纸纤维 */
+.slot.letter i.fiber{
+  position:absolute; inset:0; border-radius:inherit;
+  background-image:var(--noise);
+  background-size:100% 100%;
+  opacity:.2; mix-blend-mode:multiply;
+}
+/* 折痕：上沿暗、下沿亮（光从左上下来） */
+.slot.letter i.crease{
+  position:absolute; left:4%; right:4%; height:calc(var(--u)*1.4);
+  background:linear-gradient(180deg, rgba(150,120,88,.22), rgba(255,250,238,.4));
+}
+.slot.letter i.c1{ top:34%; }
+.slot.letter i.c2{ top:67%; }
+
+/* 字迹占位：只做“手写的节奏”，不写任何内容；第二幕换成真照片 */
+.letter-ink b,
+.ig-letter i.ink b,
+.read-paper i.ink b{
+  position:absolute;
+  display:block;
+  height:calc(var(--u)*1.1);
+  border-radius:calc(var(--u)*.6);
+  background:linear-gradient(90deg,
+    rgba(92,68,48,.42) 0%,
+    rgba(92,68,48,.30) 62%,
+    rgba(92,68,48,.12) 100%);
+  filter:blur(calc(var(--u)*.25));
+}
+.ig-letter i.ink b{
+  background:linear-gradient(90deg,
+    rgba(88,64,44,.40) 0%,
+    rgba(88,64,44,.26) 62%,
+    rgba(88,64,44,.08) 100%);
+}
+
+/* ---- 手机 ---- */
+.slot.phone{
+  border-radius:calc(var(--u)*9);
+  background:linear-gradient(150deg, #8d7a63 0%, #6b5945 40%, #4b3c2e 100%);
+  box-shadow:
+    inset calc(var(--u)*2) calc(var(--u)*2) calc(var(--u)*2.5) rgba(255,242,220,.3),
+    inset 0 0 0 calc(var(--u)*1.5) rgba(30,22,16,.55),
+    calc(var(--u)*1) calc(var(--u)*2) calc(var(--u)*4) rgba(0,0,0,.6),
+    calc(var(--u)*5) calc(var(--u)*14) calc(var(--u)*28) rgba(0,0,0,.45);
+}
+/* 屏幕（黑）；第三幕点亮 */
+.slot.phone i.screen{
+  position:absolute; inset:calc(var(--u)*5) calc(var(--u)*3.5);
+  border-radius:calc(var(--u)*5.5);
+  background:linear-gradient(165deg, #0d0a08, #060505 60%, #0a0706);
+  box-shadow:inset 0 0 calc(var(--u)*6) rgba(0,0,0,.9);
+}
+/* 信纸的余光落在手机右缘 */
+.slot.phone::before{
+  content:""; position:absolute; right:0; top:10%; bottom:10%;
+  width:calc(var(--u)*9);
+  background:linear-gradient(270deg, rgba(255,208,152,.42), rgba(255,196,132,.10) 60%, transparent);
+  filter:blur(calc(var(--u)*2));
+  border-radius:50%;
+}
+
+/* ---- 信封 ---- */
+.slot.envelope{
+  border-radius:calc(var(--u)*2);
+  background:linear-gradient(158deg, #efe0c2 0%, #e2cea8 55%, #d2bb92 100%);
+}
+/* 信纸的余光落在信封左缘 */
+.slot.envelope::before{
+  content:""; position:absolute; left:0; top:12%; bottom:12%;
+  width:calc(var(--u)*10);
+  background:linear-gradient(90deg, rgba(255,208,152,.40), rgba(255,196,132,.10) 60%, transparent);
+  filter:blur(calc(var(--u)*2));
+  border-radius:50%;
+}
+/* 信封盖的折线：一道柔和的斜向阴影 */
+.slot.envelope i.flap{
+  position:absolute; inset:0; border-radius:inherit;
+  background:
+    linear-gradient(180deg, rgba(120,92,60,.28) 0 1px, transparent 1px) 0 0/100% 100% no-repeat;
+  clip-path:polygon(0 0, 100% 0, 50% 62%);
+  background:linear-gradient(172deg, rgba(255,248,232,.5), rgba(120,92,60,.16));
+  opacity:.9;
+}
+
+/* ---- 桌面小相框 ---- */
+.slot.frame{
+  border-radius:calc(var(--u)*2);
+  background:linear-gradient(150deg, #74593c 0%, #563f29 48%, #3c2c1c 100%);
+  padding:calc(var(--u)*5);
+}
+/* 信纸余光落在相框上缘 */
+.slot.frame::before{
+  content:""; position:absolute; left:10%; right:10%; top:0;
+  height:calc(var(--u)*8);
+  background:linear-gradient(180deg, rgba(255,208,152,.34), transparent);
+  filter:blur(calc(var(--u)*2));
+  border-radius:50%;
+}
+.slot.frame i.photo{
+  position:absolute; inset:calc(var(--u)*5);
+  border-radius:calc(var(--u)*1);
+  background:linear-gradient(160deg, #4a3b2c, #33281e 60%, #241b14);
+  box-shadow:inset 0 0 calc(var(--u)*3) rgba(0,0,0,.6);
+}
+.slot.frame i.photo::after{
+  content:attr(data-label);
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:calc(var(--u)*7); color:rgba(255,246,228,.28);
+}
+
+/* ---- 抽屉（半开一条缝）---- */
+.slot.drawer{
+  border-radius:calc(var(--u)*3);
+  background:linear-gradient(155deg, #6b5338 0%, #513d28 45%, #372818 100%);
+}
+/* 拉开的那条缝：内部黑 + 一道内阴影 */
+.slot.drawer i.gap{
+  position:absolute; left:6%; right:6%; top:12%;
+  height:calc(var(--u)*5);
+  border-radius:calc(var(--u)*2);
+  background:linear-gradient(180deg, rgba(0,0,0,.85), rgba(20,12,8,.6));
+  box-shadow:inset 0 calc(var(--u)*2) calc(var(--u)*3) rgba(0,0,0,.75);
+}
+/* 缝里露出的一点暖色（纸条边缘） */
+.slot.drawer i.gap::after{
+  content:""; position:absolute; left:22%; right:18%; top:calc(var(--u)*-1.4);
+  height:calc(var(--u)*1.6);
+  border-radius:1px;
+  background:linear-gradient(90deg, rgba(243,231,207,.32), rgba(243,231,207,.16));
+}
+/* 抽屉拉手 */
+.slot.drawer i.knob{
+  position:absolute; left:50%; top:52%;
+  width:calc(var(--u)*26); height:calc(var(--u)*7);
+  transform:translate(-50%,-50%);
+  border-radius:calc(var(--u)*4);
+  background:linear-gradient(180deg, #9c8158, #6e5838);
+  box-shadow:inset 0 calc(var(--u)*1) 0 rgba(255,240,215,.35), 0 calc(var(--u)*2) calc(var(--u)*3) rgba(0,0,0,.5);
+}
+
+/* ---- 前景杯子（虚化）---- */
+.slot.cup{
+  border-radius:calc(var(--u)*16) calc(var(--u)*16) calc(var(--u)*26) calc(var(--u)*26);
+  background:linear-gradient(158deg, #8c7f6d 0%, #5f5546 55%, #3d362b 100%);
+}
+
+/* ---- 小物：耳机 / 糖 ---- */
+.slot.headphone{ border-radius:calc(var(--u)*7); background:linear-gradient(150deg,#8a7761,#5b4c3b); }
+.slot.candy{
+  border-radius:calc(var(--u)*2);
+  background:linear-gradient(140deg, #e8b6a0, #c98a72 60%, #a86b52);
+  box-shadow:
+    inset calc(var(--u)*1) calc(var(--u)*1) calc(var(--u)*1) rgba(255,255,255,.45),
+    calc(var(--u)*1) calc(var(--u)*1.5) calc(var(--u)*2.5) rgba(0,0,0,.5);
+}
+.slot.candy::after{ content:""; }
+
+/* ==========================================================================
+   6. 生活痕迹
+   ========================================================================== */
+.traces{ position:absolute; inset:0; z-index:30; pointer-events:none; }
+
+/* 杯底水渍：两圈，一圈是今晚的，一圈是前两天的 */
+.stain{
+  position:absolute;
+  border-radius:50%;
+  border:calc(var(--u)*1) solid rgba(255,246,232,.09);
+  box-shadow:inset 0 0 calc(var(--u)*2) rgba(255,246,232,.05);
+  filter:blur(calc(var(--u)*.5));
+}
+.stain.s1{ width:calc(var(--u)*27); height:calc(var(--u)*26); transform:rotate(-8deg); }
+.stain.s2{
+  width:calc(var(--u)*21); height:calc(var(--u)*20);
+  border-color:rgba(255,246,232,.05);
+  transform:rotate(14deg);
+}
+
+/* 便签：纸色 + 纤维 + 手写线（只做字迹的节奏，不写内容） */
+.note{
+  position:absolute;
+  border-radius:calc(var(--u)*1.5);
+  background:linear-gradient(150deg, #f0e2b4, #e4d39c 60%, #d6c187);
+  box-shadow:
+    calc(var(--u)*1) calc(var(--u)*1.5) calc(var(--u)*2) rgba(0,0,0,.45),
+    calc(var(--u)*3) calc(var(--u)*8) calc(var(--u)*16) rgba(0,0,0,.3);
+}
+.note::before{
+  content:""; position:absolute; inset:0; border-radius:inherit;
+  background-image:var(--noise);
+  background-size:calc(var(--u)*50) calc(var(--u)*50);
+  opacity:.14; mix-blend-mode:multiply;
+}
+/* 手写线 */
+.note i{
+  position:absolute; height:calc(var(--u)*1.8);
+  border-radius:1px;
+  background:rgba(56,40,26,.42);
+  filter:blur(.15px);
+}
+
+/* 桌沿划痕：极淡的三道 */
+.scratch{
+  position:absolute;
+  height:1px;
+  background:linear-gradient(90deg, transparent, rgba(255,240,220,.10), transparent);
+}
+
+/* 充电线（线是“线”，用 SVG 描出来比 PNG 自然） */
+.cable{ position:absolute; inset:0; z-index:31; pointer-events:none; }
+.cable svg{ width:100%; height:100%; display:block; }
+.cable .c-shadow{ stroke:rgba(0,0,0,.55); stroke-width:5; fill:none; filter:blur(2px); }
+.cable .c-body{ stroke:#241d17; stroke-width:2.6; fill:none; stroke-linecap:round; }
+.cable .c-light{ stroke:rgba(255,226,190,.16); stroke-width:1; fill:none; stroke-linecap:round; }
+
+/* ==========================================================================
+   7. 光系统（第一幕：台灯全灭）
+   ========================================================================== */
+.lights{ position:absolute; inset:0; z-index:34; pointer-events:none; }
+
+/* 墙面暖雾：整间房被染暖 */
+.lamp-fog{
+  position:absolute; inset:0;
+  background:radial-gradient(64% 52% at 20% 34%, rgba(255,186,116,.30), transparent 68%);
+  mix-blend-mode:soft-light;
+  opacity:var(--lamp-fog);
+  transition:opacity 900ms var(--ease-out);
+}
+
+/* 光锥：从灯罩口铺到桌面。横向加遮罩，边缘不是一条硬直线 */
+.lamp-cone{
+  position:absolute;
+  left:0%; top:17%;
+  width:46%; height:34%;
+  clip-path:polygon(38% 0%, 62% 0%, 100% 100%, 0% 100%);
+  background:linear-gradient(180deg,
+    rgba(255,216,156,.46) 0%,
+    rgba(255,206,142,.24) 42%,
+    rgba(255,198,130,.09) 74%,
+    rgba(255,196,130,0) 100%);
+  filter:blur(calc(var(--u)*18));
+  -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 26%, #000 74%, transparent 100%);
+  mask-image:linear-gradient(90deg, transparent 0%, #000 26%, #000 74%, transparent 100%);
+  mix-blend-mode:screen;
+  opacity:var(--lamp-cone);
+  transition:opacity 900ms var(--ease-out);
+}
+
+/* 桌面光斑：灯下那一小片亮 */
+.lamp-pool{
+  position:absolute;
+  left:2%; top:52%;
+  width:46%; height:30%;
+  background:radial-gradient(50% 46% at 42% 34%,
+    rgba(255,226,172,.95) 0%,
+    rgba(255,206,142,.55) 34%,
+    rgba(255,196,132,.18) 62%,
+    transparent 78%);
+  filter:blur(calc(var(--u)*7));
+  mix-blend-mode:screen;
+  opacity:var(--lamp-pool);
+  transition:opacity 900ms var(--ease-out);
+}
+
+/* 灯具周围的雾状泛光 */
+.lamp-halo{
+  position:absolute;
+  left:-8%; top:8%;
+  width:62%; height:34%;
+  background:radial-gradient(closest-side, rgba(255,204,142,.42), rgba(255,190,120,.10) 60%, transparent 78%);
+  filter:blur(calc(var(--u)*30));
+  mix-blend-mode:screen;
+  opacity:var(--lamp-halo);
+  transition:opacity 900ms var(--ease-out);
+}
+
+/* 灯丝核心：开灯那一下最先亮 */
+.lamp-core{
+  position:absolute;
+  left:12%; top:19%;
+  width:24%; height:5.5%;
+  background:radial-gradient(closest-side, rgba(255,246,220,.95), rgba(255,206,150,.35) 55%, transparent 78%);
+  filter:blur(calc(var(--u)*10));
+  mix-blend-mode:screen;
+  opacity:var(--lamp-core);
+  transition:opacity 200ms var(--ease-out);
+}
+
+/* ==========================================================================
+   8. 暗场 + 信纸“点火副本”
+   --------------------------------------------------------------------------
+   第一幕：信纸是唯一光源。桌面那个真身被暗场压下去，
+   这里在暗场之上再放一份同位置的信纸 + 它自己的暖光晕。
+   第三幕开灯时，这份副本和暗场一起淡出，信纸“落回桌面”。
+   ========================================================================== */
+.dim{
+  position:absolute; inset:0; z-index:40;
+  background:
+    linear-gradient(180deg,
+      rgba(6,7,12,.82) 0%,
+      rgba(8,8,12,.78) 34%,
+      rgba(10,8,9,.72) 56%,
+      rgba(13,9,7,.64) 78%,
+      rgba(17,12,8,.58) 100%);
+  opacity:var(--dim);
+  transition:opacity 800ms var(--ease-out);
+  pointer-events:none;
+}
+
+.ignite{ position:absolute; inset:0; z-index:45; pointer-events:none; }
+
+/* 光晕：三层，越靠外越淡 */
+.ig-glow{
+  position:absolute;
+  background:radial-gradient(closest-side,
+    rgba(255,206,144,.40) 0%,
+    rgba(255,190,120,.18) 32%,
+    rgba(255,180,110,.06) 56%,
+    transparent 74%);
+  filter:blur(calc(var(--u)*9));
+  mix-blend-mode:screen;
+  opacity:0;
+  animation:glowIn 1200ms 240ms var(--ease-out) forwards;
+}
+.ig-glow-2{
+  filter:blur(calc(var(--u)*24));
+  background:radial-gradient(closest-side,
+    rgba(255,178,108,.07) 0%,
+    rgba(255,168,100,.03) 44%,
+    transparent 70%);
+  animation-duration:1500ms;
+  animation-delay:320ms;
+}
+
+/* 信纸本体（副本）：纸是被自己的光透亮的，所以整张都亮，只有边缘略暗 */
+.ig-letter{
+  position:absolute;
+  border-radius:calc(var(--u)*2) calc(var(--u)*1.5) calc(var(--u)*2.5) calc(var(--u)*1.5);
+  background:
+    radial-gradient(120% 90% at 42% 28%, rgba(255,252,243,.55) 0%, transparent 62%),
+    linear-gradient(170deg, #fdf5e6 0%, #f6e9cd 48%, #ecdbba 100%);
+  box-shadow:
+    inset calc(var(--u)*.8) calc(var(--u)*.8) calc(var(--u)*1.6) rgba(255,255,252,.5),
+    inset calc(var(--u)*-1.6) calc(var(--u)*-1.6) calc(var(--u)*5) rgba(150,116,74,.16),
+    0 0 calc(var(--u)*18) rgba(255,198,136,.26),
+    calc(var(--u)*2) calc(var(--u)*6) calc(var(--u)*16) rgba(0,0,0,.5);
+  opacity:0;
+  animation:letterIn 1000ms 200ms var(--ease-out) forwards;
+}
+.ig-letter i.fiber{
+  position:absolute; inset:0; border-radius:inherit;
+  background-image:var(--noise);
+  background-size:100% 100%;
+  opacity:.26; mix-blend-mode:multiply;
+}
+/* 有真图时：本子本体 + 它自己的暖光边缘 */
+.ig-letter.has-img{
+  background:none;
+  box-shadow:none;
+  animation:letterIn 1000ms 200ms var(--ease-out) forwards;
+}
+.ig-letter.has-img img{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain;
+  filter:
+    drop-shadow(0 0 calc(var(--u)*10) rgba(255,186,110,.5))
+    drop-shadow(0 0 calc(var(--u)*26) rgba(255,150,70,.28))
+    drop-shadow(0 calc(var(--u)*6) calc(var(--u)*14) rgba(0,0,0,.5));
+}
+/* 折痕：暗线 + 亮线 = 一道真的折过的地方 */
+.ig-letter i.crease{
+  position:absolute; left:3%; right:3%; height:calc(var(--u)*2.6);
+  background:linear-gradient(180deg,
+    rgba(120,92,62,.30) 0%,
+    rgba(150,118,84,.16) 26%,
+    rgba(255,252,240,.62) 46%,
+    rgba(255,252,240,.42) 68%,
+    transparent 100%);
+  filter:blur(calc(var(--u)*.35));
+}
+.ig-letter i.c1{ top:33%; }
+.ig-letter i.c2{ top:66%; }
+/* 折缝两侧的细微起伏（纸张被叠过的记忆） */
+.ig-letter i.crease::before,
+.ig-letter i.crease::after{
+  content:""; position:absolute; left:0; right:0;
+  height:calc(var(--u)*7);
+}
+.ig-letter i.crease::before{
+  bottom:100%;
+  background:linear-gradient(180deg, transparent, rgba(120,92,62,.07));
+}
+.ig-letter i.crease::after{
+  top:100%;
+  background:linear-gradient(180deg, rgba(255,250,238,.10), transparent);
+}
+
+/* 桌面上的那一小片暖光：信纸漏下来的光，把周围的桌面和物件边缘照出来 */
+.ig-spill{
+  position:absolute;
+  background:radial-gradient(closest-side,
+    rgba(255,212,154,.34) 0%,
+    rgba(255,198,136,.16) 34%,
+    rgba(255,188,124,.06) 58%,
+    transparent 78%);
+  filter:blur(calc(var(--u)*14));
+  mix-blend-mode:screen;
+  opacity:0;
+  animation:glowIn 1400ms 420ms var(--ease-out) forwards;
+}
+
+/* 墙面上被信纸顶上去的一点暖光（贴着桌沿往上晕） */
+.ig-wallwash{
+  position:absolute;
+  background:radial-gradient(closest-side,
+    rgba(255,208,152,.18) 0%,
+    rgba(255,196,136,.08) 38%,
+    transparent 72%);
+  filter:blur(calc(var(--u)*22));
+  mix-blend-mode:screen;
+  opacity:0;
+  animation:glowIn 1600ms 520ms var(--ease-out) forwards;
+}
+
+@keyframes glowIn{
+  from{ opacity:0; }
+  to{ opacity:1; }
+}
+@keyframes letterIn{
+  from{ opacity:0; transform:translateY(calc(var(--u)*5)) scale(.995); }
+  to{ opacity:1; transform:translateY(0) scale(1); }
+}
+
+/* 整间房的入场：从全黑里浮起来 */
+.room{ animation:roomIn 700ms var(--ease-out) both; }
+@keyframes roomIn{
+  from{ opacity:0; }
+  to{ opacity:1; }
+}
+
+/* ==========================================================================
+   10. 第二幕：把信捧到眼前
+   --------------------------------------------------------------------------
+   点信纸 → 信纸从桌面“飞”到眼前并放大，房间退到后面去。
+   这一层用真实屏幕像素定位（JS 算 rect），所以桌面端缩放也不会错位。
+   ========================================================================== */
+.read{
+  position:absolute; inset:0; z-index:60;
+  display:none;
+}
+body[data-act="2"] .read{ display:block; }
+
+.read-backdrop{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(72% 44% at 50% 34%,
+      rgba(26,16,10,.74) 0%,
+      rgba(10,6,5,.92) 54%,
+      rgba(4,3,2,.97) 100%);
+  opacity:0;
+  transition:opacity 760ms var(--ease-out);
+}
+body[data-act="2"] .read-backdrop{ opacity:1; }
+
+.read-sheet{
+  position:absolute;
+  overflow:hidden;
+  border-radius:calc(var(--u)*3);
+  background:
+    radial-gradient(120% 90% at 42% 26%, rgba(255,252,243,.5) 0%, transparent 62%),
+    linear-gradient(170deg, #fdf5e6 0%, #f6e9cd 48%, #ecdbba 100%);
+  box-shadow:
+    0 0 calc(var(--u)*34) rgba(255,198,136,.24),
+    0 calc(var(--u)*12) calc(var(--u)*34) rgba(0,0,0,.62);
+  will-change:left, top, width, height, transform;
+}
+.read-scroll{
+  position:absolute; inset:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.read-img{ display:block; width:100%; height:auto; }
+.read-paper{ position:absolute; inset:0; }
+.read-paper i.fiber{
+  position:absolute; inset:0;
+  background-image:var(--noise);
+  background-size:100% 100%;
+  opacity:.16; mix-blend-mode:multiply;
+}
+.read-paper i.crease{
+  position:absolute; left:3%; right:3%; height:calc(var(--u)*2.2);
+  background:linear-gradient(180deg,
+    rgba(120,92,62,.18) 0%,
+    rgba(150,118,84,.09) 28%,
+    rgba(255,252,240,.42) 48%,
+    rgba(255,252,240,.26) 70%,
+    transparent 100%);
+  filter:blur(calc(var(--u)*.5));
+}
+.read-paper i.c1{ top:33%; }
+.read-paper i.c2{ top:66%; }
+
+/* 往下滑：长信才有的一行小提示 */
+.read-more{
+  position:absolute; left:50%; bottom:calc(var(--u)*74);
+  transform:translateX(-50%);
+  font-size:calc(var(--u)*10.5);
+  letter-spacing:.2em;
+  color:rgba(255,232,198,.42);
+  opacity:0;
+  transition:opacity 500ms var(--ease-out);
+  pointer-events:none;
+  animation:moreBreath 2600ms ease-in-out infinite;
+}
+.read-more.on{ opacity:1; }
+@keyframes moreBreath{
+  0%,100%{ transform:translateX(-50%) translateY(0); }
+  50%{ transform:translateX(-50%) translateY(calc(var(--u)*4)); }
+}
+
+/* 读完了：只有滚动到底（或稍等一会儿）才浮出来 */
+.read-next{
+  position:absolute; left:50%; bottom:calc(var(--u)*26);
+  transform:translateX(-50%) translateY(calc(var(--u)*10));
+  padding:calc(var(--u)*11) calc(var(--u)*26);
+  border:1px solid rgba(255,226,186,.24);
+  border-radius:999px;
+  background:rgba(38,26,18,.55);
+  color:#f6e8ce;
+  font:inherit;
+  font-size:calc(var(--u)*12.5);
+  letter-spacing:.12em;
+  -webkit-backdrop-filter:blur(8px);
+  backdrop-filter:blur(8px);
+  opacity:0; pointer-events:none;
+  transition:opacity 560ms var(--ease-out), transform 560ms var(--ease-out);
+  cursor:pointer;
+}
+.read-next.on{
+  opacity:1; pointer-events:auto;
+  transform:translateX(-50%) translateY(0);
+}
+
+/* 第一幕：轻点这封信（很轻的一行字，不抢戏） */
+.tap-hint{
+  position:absolute;
+  width:100%;
+  z-index:46;
+  text-align:center;
+  font-size:calc(var(--u)*10.5);
+  letter-spacing:.26em;
+  color:rgba(255,232,198,.46);
+  pointer-events:none;
+  opacity:0;
+  animation:hintIn 1400ms 2600ms var(--ease-out) forwards;
+}
+@keyframes hintIn{
+  from{ opacity:0; transform:translateY(calc(var(--u)*5)); }
+  to{ opacity:1; transform:none; }
+}
+body[data-act="2"] .tap-hint{ opacity:0; animation:none; transition:opacity 240ms linear; }
+body[data-act="3"] .tap-hint{ opacity:0; animation:none; }
+
+/* 电脑端：读信时把房间外的黑也压成同一个黑，免得看见两条边 */
+body[data-act="2"]{
+  background:#050403;
+}
+
+/* ==========================================================================
+   11. 第三幕：开灯（灯丝 → 光锥 → 暗场退 → 墙面暖雾 → 彩带 → 物件浮现）
+   ========================================================================== */
+body[data-act="3"]{
+  --dim: .16;
+  --lamp-core: 1;
+  --lamp-cone: 1;
+  --lamp-pool: 1;
+  --lamp-halo: 1;
+  --lamp-fog: 1;
+}
+
+/* 时序：灯丝 0ms / 光锥 halo 120ms / 暗场 180ms / 桌面光斑与暖雾 200ms */
+body[data-act="3"] .lamp-core{ transition-duration:140ms; transition-delay:0ms; }
+body[data-act="3"] .lamp-cone{ transition-duration:880ms; transition-delay:120ms; }
+body[data-act="3"] .lamp-halo{ transition-duration:1000ms; transition-delay:120ms; }
+body[data-act="3"] .lamp-pool{ transition-duration:900ms; transition-delay:200ms; }
+body[data-act="3"] .lamp-fog{ transition-duration:1200ms; transition-delay:200ms; }
+body[data-act="3"] .dim{ transition-duration:800ms; transition-delay:180ms; }
+
+/* 桌面上的信纸真身接上来，点火副本熄灭 */
+body[data-act="3"] .ignite{
+  opacity:0;
+  transition:opacity 900ms 140ms var(--ease-out);
+}
+
+/* 台灯点亮后：不再是一团黑洞，而是被自己照暖的物件轮廓 */
+body[data-act="3"] .slot.lamp:not(.has-img){
+  filter:blur(calc(var(--u)*6));
+  background:
+    radial-gradient(46% 11% at 50% 43%, rgba(255,214,164,.44), transparent 72%),
+    radial-gradient(96% 48% at 50% 24%,
+      rgba(52,36,25,.62) 0%,
+      rgba(26,18,13,.38) 68%,
+      rgba(14,10,7,.10) 96%);
+}
+
+/* 照片墙亮起 */
+body[data-act="3"] .shot{
+  opacity:1;
+  filter:none;
+  transition-delay:900ms;
+}
+
+/* 物件一件一件浮出来（真正的时序在 JS 里按索引给 delay） */
+@keyframes slotIn{
+  from{ opacity:.22; }
+  to{ opacity:1; }
+}
+
+/* 彩带 */
+.confetti{
+  position:absolute; inset:0; z-index:52;
+  pointer-events:none;
+  opacity:0;
+}
+body[data-act="3"] .confetti{ opacity:1; }
+
+/* ==========================================================================
+   10. 第四幕：房间活了之后，东西可以点
+   --------------------------------------------------------------------------
+   只在 body[data-free="1"] 时生效；点中的东西会在原地轻轻一缩，像被手指按住。
+   ========================================================================== */
+
+/* 可以点的东西：手指放上去有个底光 */
+body[data-free="1"] .slot.has-img[data-key="phone"],
+body[data-free="1"] .slot.has-img[data-key="drawer"],
+body[data-free="1"] .slot.has-img[data-key="frame"],
+body[data-free="1"] .slot.has-img[data-key="album"],
+body[data-free="1"] .shot{
+  cursor:pointer;
+}
+body[data-free="1"] .slot[data-key="phone"]:active,
+body[data-free="1"] .slot[data-key="drawer"]:active,
+body[data-free="1"] .slot[data-key="frame"]:active,
+body[data-free="1"] .slot[data-key="album"]:active{
+  transform:scale(.985);
+}
+
+/* 相册是实拍的白色本子，压一点亮、补一层影，才不像贴上去的 */
+.slot.has-img[data-key="album"] img{
+  filter:brightness(.62) saturate(.86)
+         drop-shadow(0 calc(var(--u)*2) calc(var(--u)*5) rgba(0,0,0,.55));
+}
+body[data-free="1"] .slot.has-img[data-key="album"] img{
+  filter:brightness(.86) saturate(.92)
+         drop-shadow(0 calc(var(--u)*2) calc(var(--u)*5) rgba(0,0,0,.55));
+}
+
+/* 第四幕的提示：出现一次就淡掉 */
+.free-hint{
+  position:absolute; left:0; right:0; z-index:47;
+  bottom:calc(var(--u)*22);
+  text-align:center;
+  font-size:calc(var(--u)*11);
+  letter-spacing:.16em;
+  color:rgba(255,226,190,.62);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 900ms var(--ease-out);
+}
+.free-hint.on{ opacity:1; }
+
+/* 照片被点开之后：变亮一点，告诉她“这张可以翻” */
+body[data-free="1"] .shot{ transition:filter 260ms var(--ease-out), opacity 260ms var(--ease-out); }
+body[data-free="1"] .shot:active{ filter:brightness(1.25) !important; }
+
+/* ---- 照片墙大图 ---- */
+.lb{
+  position:absolute; inset:0; z-index:70;
+  display:none;
+  opacity:0;
+  transition:opacity 320ms var(--ease-out);
+}
+.lb.on{ display:block; }
+.lb.show{ opacity:1; }
+.lb-backdrop{
+  position:absolute; inset:0;
+  background:radial-gradient(120% 90% at 50% 45%, rgba(20,14,10,.86), rgba(4,3,2,.97));
+  backdrop-filter:blur(calc(var(--u)*3));
+}
+.lb-stage{
+  position:absolute; inset:0;
+  pointer-events:none;      /* 空白处要能点到背景，才能收起 */
+  display:grid; place-items:center;
+  padding:calc(var(--u)*54) calc(var(--u)*18);
+}
+.lb-card{
+  pointer-events:auto;
+  position:relative;
+  width:100%;
+  max-width:calc(var(--u)*300);
+  max-height:100%;
+  aspect-ratio:3 / 4;
+  background:#f6ead4;
+  border-radius:calc(var(--u)*3);
+  box-shadow:
+    0 calc(var(--u)*18) calc(var(--u)*46) rgba(0,0,0,.66),
+    0 0 calc(var(--u)*60) rgba(255,190,120,.12);
+  transform:scale(.94) translateY(calc(var(--u)*8));
+  transition:transform 420ms var(--ease-out);
+  overflow:hidden;
+}
+.lb.show .lb-card{ transform:none; }
+.lb-card img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+/* 还没放照片时：一张空相纸 + 编号 */
+.lb-empty{
+  position:absolute; inset:0;
+  display:grid; place-items:center;
+  gap:calc(var(--u)*10);
+  background:
+    radial-gradient(90% 70% at 34% 24%, #fffaf0, #f2e3c8 62%, #e6d3b2);
+  color:#a98b63;
+  font-size:calc(var(--u)*12);
+  letter-spacing:.3em;
+  text-align:center;
+}
+.lb-empty b{ display:block; font-size:calc(var(--u)*30); letter-spacing:.06em; color:#bfa079; font-weight:600; }
+.lb-nav{
+  position:absolute; top:50%; transform:translateY(-50%);
+  width:calc(var(--u)*38); height:calc(var(--u)*38);
+  border-radius:50%;
+  border:0;
+  background:rgba(255,236,208,.10);
+  color:rgba(255,236,208,.80);
+  font-size:calc(var(--u)*20);
+  line-height:1;
+  display:grid; place-items:center;
+}
+.lb-nav:active{ background:rgba(255,236,208,.2); }
+.lb-prev{ left:calc(var(--u)*6); }
+.lb-next{ right:calc(var(--u)*6); }
+.lb-cap{
+  position:absolute; left:0; right:0;
+  bottom:calc(var(--u)*24);
+  text-align:center;
+  font-size:calc(var(--u)*11);
+  letter-spacing:.22em;
+  color:rgba(255,226,190,.55);
+}
+
+/* ---- 手机亮屏 ---- */
+.hold{
+  position:absolute; inset:0; z-index:70;
+  display:none;
+  opacity:0;
+  transition:opacity 300ms var(--ease-out);
+}
+.hold.on{ display:block; }
+.hold.show{ opacity:1; }
+.hold-backdrop{
+  position:absolute; inset:0;
+  background:rgba(6,5,4,.72);
+  backdrop-filter:blur(calc(var(--u)*4));
+}
+.hold-phone{
+  position:absolute;
+  left:50%; top:50%;
+  width:calc(var(--u)*266);
+  height:calc(var(--u)*540);
+  margin-left:calc(var(--u)*-133);
+  margin-top:calc(var(--u)*-270);
+  border-radius:calc(var(--u)*26);
+  background:linear-gradient(160deg,#241d18,#0d0a08 62%);
+  box-shadow:
+    0 calc(var(--u)*24) calc(var(--u)*60) rgba(0,0,0,.7),
+    0 0 calc(var(--u)*80) rgba(255,186,116,.16),
+    inset 0 0 0 1px rgba(255,226,190,.10);
+  transform:translateY(calc(var(--u)*10)) scale(.97);
+  transition:transform 460ms var(--ease-out);
+  overflow:hidden;
+}
+.hold.show .hold-phone{ transform:none; }
+.hold-screen{
+  position:absolute; inset:calc(var(--u)*9);
+  border-radius:calc(var(--u)*20);
+  overflow:hidden;
+  background:
+    radial-gradient(120% 80% at 20% 0%, #2b2118, #100d0a 68%);
+  padding:calc(var(--u)*30) calc(var(--u)*22);
+  display:flex; flex-direction:column;
+  justify-content:flex-start;
+  gap:calc(var(--u)*12);
+}
+.hold-time{
+  font-size:calc(var(--u)*10);
+  letter-spacing:.18em;
+  color:rgba(255,226,190,.40);
+}
+.hold-msg{
+  margin-top:calc(var(--u)*6);
+  display:flex; flex-direction:column; gap:calc(var(--u)*8);
+  font-size:calc(var(--u)*13);
+  line-height:1.85;
+  color:#f6e5c9;
+  letter-spacing:.02em;
+}
+.hold-msg i{
+  display:block;
+  height:1px;
+  background:linear-gradient(90deg, rgba(255,214,164,.22), rgba(255,214,164,0));
+  margin:calc(var(--u)*4) 0;
+}
+.hold-sign{
+  margin-top:auto;
+  align-self:flex-end;
+  font-size:calc(var(--u)*12);
+  color:rgba(255,214,164,.66);
+  letter-spacing:.08em;
+}
+.hold-tip{
+  position:absolute; left:0; right:0; bottom:calc(var(--u)*22);
+  text-align:center;
+  font-size:calc(var(--u)*11);
+  letter-spacing:.16em;
+  color:rgba(255,226,190,.45);
+  z-index:71;
+  pointer-events:none;
+}
+
+/* ---- 抽屉：拉开一条缝，里面的东西露出来 ---- */
+body[data-free="1"] .slot[data-key="drawer"]{ transition:transform 520ms var(--ease-out), filter 300ms; }
+body[data-drawer="1"] .slot[data-key="drawer"]{
+  filter:brightness(.92) saturate(.95);
+}
+.dwr{
+  position:absolute; z-index:46;
+  pointer-events:none;
+  display:none;
+  opacity:0;
+  transition:opacity 420ms var(--ease-out);
+}
+.dwr.on{ display:block; }
+.dwr.show{ opacity:1; }
+/* 抽屉拉开后里面那层暗腔 */
+.dwr::before{
+  content:''; position:absolute; inset:calc(var(--u)*7) calc(var(--u)*7) calc(var(--u)*6);
+  border-radius:calc(var(--u)*2);
+  background:radial-gradient(120% 90% at 40% 6%, #221709, #120c08 58%, #0a0705);
+  box-shadow:inset 0 calc(var(--u)*8) calc(var(--u)*16) rgba(0,0,0,.9);
+}
+.dwr-item:nth-child(1){ animation:slotIn 420ms 60ms var(--ease-out) both; }
+.dwr-item:nth-child(2){ animation:slotIn 420ms 150ms var(--ease-out) both; }
+.dwr-item:nth-child(3){ animation:slotIn 420ms 240ms var(--ease-out) both; }
+.dwr-item{
+  position:absolute;
+  pointer-events:auto;
+  border-radius:calc(var(--u)*2);
+  box-shadow:0 calc(var(--u)*4) calc(var(--u)*10) rgba(0,0,0,.55);
+  cursor:pointer;
+  transition:transform 200ms var(--ease-out);
+}
+.dwr-item:active{ transform:scale(.96); }
+.dwr-item.ph{ background:linear-gradient(150deg,#f5e7cd,#dcc7a2); }
+.dwr-item.ph i{
+  position:absolute; left:14%; right:14%; top:26%; height:2px;
+  background:rgba(120,92,62,.35);
+  box-shadow:0 calc(var(--u)*9) 0 rgba(120,92,62,.28), 0 calc(var(--u)*18) 0 rgba(120,92,62,.2);
+}
+.dwr-item.box{ background:linear-gradient(150deg,#7a5836,#3f2b1a); }
+.dwr-item.box i{
+  position:absolute; left:50%; top:50%; width:26%; height:9%;
+  transform:translate(-50%,-50%);
+  border-radius:calc(var(--u)*1);
+  background:linear-gradient(#e8c088,#9a6f3c);
+}
+.dwr-card{
+  position:absolute; inset:0; z-index:71;
+  display:none;
+  opacity:0;
+  transition:opacity 280ms var(--ease-out);
+}
+.dwr-card.on{ display:block; }
+.dwr-card.show{ opacity:1; }
+.dwr-card-backdrop{ position:absolute; inset:0; background:rgba(6,5,4,.68); backdrop-filter:blur(calc(var(--u)*3)); }
+.dwr-card-paper{
+  position:absolute; left:50%; top:50%;
+  width:calc(var(--u)*296);
+  margin-left:calc(var(--u)*-148);
+  transform:translateY(-50%);
+  padding:calc(var(--u)*26) calc(var(--u)*24) calc(var(--u)*22);
+  border-radius:calc(var(--u)*2);
+  background:linear-gradient(170deg,#f8eeda,#ecdcbc);
+  box-shadow:0 calc(var(--u)*20) calc(var(--u)*50) rgba(0,0,0,.6);
+  color:#5b4630;
+}
+.dwr-card-paper h4{
+  margin:0 0 calc(var(--u)*10);
+  font-size:calc(var(--u)*13);
+  letter-spacing:.14em;
+  font-weight:600;
+  color:#8a6a44;
+}
+/* 纸条里的小照片（相册实物） */
+.dwr-card-paper img{
+  display:block;
+  width:100%;
+  margin:0 0 calc(var(--u)*14);
+  border-radius:calc(var(--u)*1.5);
+  box-shadow:0 calc(var(--u)*6) calc(var(--u)*16) rgba(90,66,40,.34);
+  filter:saturate(.94) brightness(1.02);
+}
+.dwr-card-paper p{
+  margin:0 0 calc(var(--u)*8);
+  font-size:calc(var(--u)*12.5);
+  line-height:2;
+  letter-spacing:.02em;
+}
+.dwr-card-paper span{
+  display:block;
+  margin-top:calc(var(--u)*10);
+  font-size:calc(var(--u)*10);
+  letter-spacing:.18em;
+  color:rgba(140,110,74,.7);
+  text-align:right;
+}
+
+/* ==========================================================================
+   9. 无障碍：尊重系统的“减少动态效果”
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:1ms !important; transition-duration:1ms !important; }
+}
+</style>
+</head>
+
+<body data-act="1">
+<div class="stage">
+  <div class="room" id="room">
+
+    <!-- 墙 -->
+    <div class="wall"></div>
+    <div class="hook"></div>
+    <div class="wallshots" id="wallshots"></div>
+
+    <!-- 桌 -->
+    <div class="desk"></div>
+    <div class="desk-edge"></div>
+    <div class="desk-shadow"></div>
+
+    <!-- 物件 -->
+    <div class="props" id="props"></div>
+    <div class="props props-fg" id="props-fg"></div>
+
+    <!-- 生活痕迹 -->
+    <div class="traces" id="traces"></div>
+    <div class="cable" id="cable"></div>
+
+    <!-- 光（第一幕全灭） -->
+    <div class="lights">
+      <div class="lamp-fog"></div>
+      <div class="lamp-halo"></div>
+      <div class="lamp-cone"></div>
+      <div class="lamp-pool"></div>
+      <div class="lamp-core"></div>
+    </div>
+
+    <div class="vignette"></div>
+
+    <!-- 暗场 + 信纸点亮副本 -->
+    <div class="dim" id="dim"></div>
+    <div class="ignite" id="ignite"></div>
+
+    <!-- 彩带（只在开灯那一下撒一次） -->
+    <canvas class="confetti" id="confetti"></canvas>
+
+    <!-- 第二幕：把信捧到眼前 -->
+    <div class="read" id="read">
+      <div class="read-backdrop"></div>
+      <div class="read-sheet" id="read-sheet">
+        <div class="read-scroll" id="read-scroll"></div>
+      </div>
+      <div class="read-more" id="read-more">往下滑</div>
+      <button class="read-next" id="read-next" type="button">读完了</button>
+    </div>
+
+    <!-- 第四幕：照片墙大图 -->
+    <div class="lb" id="lb">
+      <div class="lb-backdrop" id="lb-backdrop"></div>
+      <div class="lb-stage">
+        <div class="lb-card" id="lb-card"></div>
+      </div>
+      <button class="lb-nav lb-prev" id="lb-prev" type="button" aria-label="上一张">‹</button>
+      <button class="lb-nav lb-next" id="lb-next" type="button" aria-label="下一张">›</button>
+      <div class="lb-cap" id="lb-cap"></div>
+    </div>
+
+    <!-- 第四幕：手机亮屏 -->
+    <div class="hold" id="hold">
+      <div class="hold-backdrop" id="hold-backdrop"></div>
+      <div class="hold-phone">
+        <div class="hold-screen" id="hold-screen"></div>
+      </div>
+      <div class="hold-tip">点一下收起来</div>
+    </div>
+
+    <!-- 第四幕：抽屉里的东西 -->
+    <div class="dwr" id="dwr"></div>
+    <div class="dwr-card" id="dwr-card">
+      <div class="dwr-card-backdrop" id="dwr-card-backdrop"></div>
+      <div class="dwr-card-paper" id="dwr-card-paper"></div>
+    </div>
+
+    <!-- 第四幕：进房间后的那句提示 -->
+    <div class="free-hint" id="free-hint">桌上的东西，都可以看看</div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   CONFIG — 素材与文案的唯一入口
+   --------------------------------------------------------------------------
+   第二幕的信、第四幕手机亮屏的内容都在这里替换；
+   PNG 到位后把路径填进 ASSETS，槽位会自动切换到图片。
+   ========================================================================== */
+const CONFIG = {
+  /* 素材路径：留空 = 用占位色块（第一轮全部留空） */
+  assets: {
+    letter:   'assets/notebook.webp',  /* 桌上那本本子（真封面） */
+    letterPage:'',                    /* 本子里写了字的那一页，等照片到位再填 */
+    envelope: 'assets/envelope.png',
+    phone:    'assets/phone.png',
+    lamp:     'assets/lamp-off.webp',
+    lampOn:   'assets/lamp-on.webp',
+    frame:    'assets/frame.png',
+    drawer:   'assets/drawer.png',
+    cup:      'assets/cup.png',
+    headphone:'assets/headphone.png',
+    candy:    'assets/candy.png',
+    album:    'assets/album.webp',
+  },
+  tapHint: '轻点这个本子',
+
+  /* 第一幕那句轻提示 */
+  tapHint: '轻点这个本子',
+
+  /* 台灯在画面里的位置（设计稿 px，390×844 基准） */
+  lamp: { x: -44, y: 26, w: 150, h: 400 },
+  /* 信纸在桌面上的位置：暗场副本会复制这个矩形 */
+  letter: { x: 108, y: 470, w: 144, h: 184, rot: -2.5 },
+
+  /* ===== 第四幕的文案：全部集中在下面三块，改字只改这里 ===== */
+
+  /* 照片墙 16 张：留空 = 显示“放照片”的空相纸，填路径 = 显示真图
+     顺序和墙上的编号 01–16 一一对应 */
+  photos: [
+    '', '', '', '', '', '', '', '',
+    '', '', '', '', '', '', '', '',
+  ],
+
+  /* 手机亮屏后显示的内容 */
+  phoneScreen: {
+    time: '23:47',
+    lines: [
+      '有一条没发出去的草稿，',
+      '写了又删，删了又写。',
+      '',
+      '今天你十八岁。',
+      '我想说的其实只有一句——',
+      '这些年，谢谢你在。',
+    ],
+    sign: '—— 我',
+  },
+
+  /* 抽屉里的三样东西：点开各有一段话（img 可选，纸条里会带一张实拍图） */
+  drawerItems: [
+    {
+      cls: 'ph',
+      x: 8, y: 14, w: 52, h: 70, rot: -5,
+      title: '一叠洗出来的照片',
+      body: ['同一张洗了两遍，', '因为那天的光太好了。'],
+      sign: '舍不得扔',
+    },
+    {
+      cls: 'box',
+      x: 66, y: 24, w: 48, h: 44, rot: 3,
+      title: '一个小盒子',
+      body: ['里面是那年冬天的两张票根，', '字都糊了，我没舍得扔。'],
+      sign: '那年冬天',
+    },
+    {
+      cls: 'ph',
+      x: 118, y: 12, w: 46, h: 64, rot: 7,
+      title: '一张拍糊了的照片',
+      body: ['你笑的时候手抖了，', '反而成了我最喜欢的一张。'],
+      sign: '某天下午',
+    },
+  ],
+};
+
+/* 物件槽位表（设计稿 px）
+   布局：桌面左上旧手机、右上信封、正中手写信、左下相框、右下抽屉；
+   小物件（耳机、糖）随意散落，不做对称。 */
+const LAYOUT = {
+  lamp:     { x: -44, y: 26,  w: 150, h: 400, rot: 0,    cls: 'lamp',      label: '台灯',  layer: 'props' },
+  phone:    { x: 46,  y: 452, w: 52,  h: 192, rot: -8,   cls: 'phone',     label: '手机',  layer: 'props' },
+  envelope: { x: 258, y: 448, w: 112, h: 72,  rot: 5,    cls: 'envelope',  label: '信封',  layer: 'props' },
+  letter:   { ...CONFIG.letter,                           cls: 'letter',    label: '',      layer: 'props' },
+  album:    { x: 254, y: 560, w: 74,  h: 87,  rot: 5,    cls: 'album',     label: '',      layer: 'props' },
+  headphone:{ x: 306, y: 656, w: 54,  h: 38,  rot: -8,   cls: 'headphone', label: '耳机',  layer: 'props' },
+  candy:    { x: 34,  y: 672, w: 19,  h: 19,  rot: 12,   cls: 'candy',     label: '',      layer: 'props' },
+  frame:    { x: 40,  y: 700, w: 96,  h: 122, rot: -3.5, cls: 'frame',     label: '',      layer: 'props' },
+  drawer:   { x: 210, y: 700, w: 172, h: 116, rot: 0,    cls: 'drawer',    label: '抽屉',  layer: 'props' },
+  cup:      { x: -30, y: 748, w: 132, h: 168, rot: 0,    cls: 'cup',       label: '杯子',  layer: 'fg' },
+};
+
+/* 照片墙：16 个相框（设计稿 px 位置 + 尺寸 + 微旋 + 占位标签） */
+const SHOTS = [
+  { x: 22,  y: 74,  w: 58, h: 72, rot: -3,   label: '01' },
+  { x: 94,  y: 56,  w: 50, h: 62, rot: 2.5,  label: '02' },
+  { x: 160, y: 92,  w: 62, h: 54, rot: 3.5,  label: '03' },
+  { x: 236, y: 62,  w: 62, h: 78, rot: -2,   label: '04' },
+  { x: 314, y: 88,  w: 54, h: 68, rot: 2.5,  label: '05' },
+  { x: 16,  y: 168, w: 60, h: 48, rot: -2.5, label: '06' },
+  { x: 92,  y: 150, w: 48, h: 60, rot: 3,    label: '07' },
+  { x: 158, y: 172, w: 64, h: 50, rot: -3,   label: '08' },
+  { x: 240, y: 160, w: 52, h: 64, rot: 2,    label: '09' },
+  { x: 310, y: 168, w: 58, h: 48, rot: -2.5, label: '10' },
+  { x: 34,  y: 246, w: 54, h: 66, rot: 3,    label: '11' },
+  { x: 104, y: 268, w: 50, h: 44, rot: -2,   label: '12' },
+  { x: 172, y: 250, w: 56, h: 68, rot: 2.5,  label: '13' },
+  { x: 246, y: 268, w: 52, h: 46, rot: -3,   label: '14' },
+  { x: 312, y: 244, w: 44, h: 58, rot: 2,    label: '15' },
+  { x: 138, y: 318, w: 62, h: 46, rot: -2.5, label: '16' },
+];
+
+/* ==========================================================================
+   工具
+   ========================================================================== */
+const W = 390, H = 844;
+const pxw = (n) => `calc(var(--u) * ${n})`;
+const px  = (n) => `calc(var(--u) * ${n})`;
+
+/** 设计稿坐标 → 舞台百分比（注意不能叫 top/left，会和 window.top 撞名） */
+const posL = (x) => `${(x / W) * 100}%`;
+const posT = (y) => `${(y / H) * 100}%`;
+
+/** 建一个物件槽位 */
+function makeSlot(key, geo, layer) {
+  const el = document.createElement('div');
+  el.className = `slot ${geo.cls}`;
+  el.dataset.label = geo.label || '';
+  el.style.left = posL(geo.x);
+  el.style.top = posT(geo.y);
+  el.style.width = pxw(geo.w);
+  el.style.height = pxw(geo.h);
+  el.style.transform = `rotate(${geo.rot}deg)`;
+  el.dataset.key = key;
+
+  /* 素材：有路径就换成图片 */
+  const src = CONFIG.assets[key];
+  if (src) {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = geo.label || '';
+    el.appendChild(img);
+    el.classList.add('has-img');
+
+    /* 台灯有两张：灭着的和亮着的，按 --lamp-core 交叉淡入 */
+    if (key === 'lamp' && CONFIG.assets.lampOn) {
+      const on = document.createElement('img');
+      on.src = CONFIG.assets.lampOn;
+      on.alt = '';
+      on.className = 'lamp-on';
+      el.appendChild(on);
+    }
+  }
+  return el;
+}
+
+/* ==========================================================================
+   字迹占位：只做手写的节奏（长短不一的细线），不出现任何可读内容
+   --------------------------------------------------------------------------
+   第二幕换成真实照片后，这一层会被 CONFIG.assets.letter 的图片盖住。
+   ========================================================================== */
+const INK = [
+  /* [top%, left%, width%, rot(deg), 粗细倍率] —— 前两段是称呼，后面是正文，最后一行是落款 */
+  [10.5, 12, 34, 0.2,  1.25],
+  [17.5, 12, 70, -0.15, 1],
+  [22.5, 12, 76, 0.1,  1],
+  [27.5, 12, 64, -0.2, 1],
+  [36.5, 12, 72, 0.15, 1],
+  [41.5, 12, 58, -0.1, 1],
+  [46.5, 12, 68, 0.2,  1],
+  [55.5, 12, 62, -0.15, 1],
+  [60.5, 12, 40, 0.1,  1],
+  [74,   44, 26, 0.3,  1.1],
+];
+function inkMarkup(cls = 'ink') {
+  return INK.map(([t, l, w, r, k]) =>
+    `<i class="${cls}"><b style="top:${t}%;left:${l}%;width:${w}%;` +
+    `transform:rotate(${r}deg);height:calc(var(--u)*${1.05 * k})"></b></i>`
+  ).join('');
+}
+
+/* 读信视图用的密版字迹：一整页的“手写节奏”，同样不出现任何可读内容 */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function denseInk() {
+  const rnd = mulberry32(20260818);          // 固定种子：每次打开都是同一封信
+  const row = (top, left, w, rot, k = 1) =>
+    `<i class="ink"><b style="top:${top}%;left:${left}%;width:${w}%;` +
+    `transform:rotate(${rot}deg);height:calc(var(--u)*${1.15 * k})"></b></i>`;
+  let s = '';
+  s += row(6.4, 64, 23, 0.2, 1.05);          // 日期，靠右
+  s += row(11.4, 10, 27, -0.1, 1.25);        // 称呼
+  let y = 16.4;
+  for (const n of [7, 6, 5]) {               // 三段正文
+    for (let i = 0; i < n; i++) {
+      s += row(y, 10 + rnd() * 1.4, 60 + rnd() * 28, (rnd() - 0.5) * 0.5);
+      y += 3.5;
+    }
+    y += 2.5;
+  }
+  s += row(88.2, 55, 21, 0.3, 1.15);         // 落款
+  return s;
+}
+
+/* ==========================================================================
+   物件装配
+   ========================================================================== */
+const propsRoot = document.getElementById('props');
+const propsFg   = document.getElementById('props-fg');
+
+for (const [key, geo] of Object.entries(LAYOUT)) {
+  const el = makeSlot(key, geo, geo.layer);
+
+  /* 部件：每个物件内部的小结构（屏幕、折线、拉手……）*/
+  if (key === 'letter') {
+    el.innerHTML +=
+      '<i class="fiber"></i><i class="crease c1"></i><i class="crease c2"></i>' +
+      `<span class="letter-ink">${inkMarkup()}</span>`;
+  }
+  if (key === 'phone') {
+    el.innerHTML += '<i class="screen"></i>';
+  }
+  if (key === 'envelope') {
+    el.innerHTML += '<i class="flap"></i>';
+  }
+  if (key === 'frame') {
+    el.innerHTML += '<i class="photo"></i>';
+  }
+  if (key === 'drawer') {
+    el.innerHTML += '<i class="gap"></i><i class="knob"></i>';
+  }
+
+  (geo.layer === 'fg' ? propsFg : propsRoot).appendChild(el);
+}
+
+/* ==========================================================================
+   照片墙
+   ========================================================================== */
+const wallRoot = document.getElementById('wallshots');
+for (const s of SHOTS) {
+  const el = document.createElement('div');
+  el.className = 'shot';
+  el.dataset.label = s.label;
+  el.style.left = posL(s.x);
+  el.style.top = posT(s.y);
+  el.style.width = pxw(s.w);
+  el.style.height = pxw(s.h);
+  el.style.transform = `rotate(${s.rot}deg)`;
+  wallRoot.appendChild(el);
+}
+
+/* ==========================================================================
+   生活痕迹
+   ========================================================================== */
+const traces = document.getElementById('traces');
+
+/* 杯底水渍（两圈） */
+for (const [cls, x, y] of [['s1', 222, 690], ['s2', 228, 694]]) {
+  const el = document.createElement('div');
+  el.className = `stain ${cls}`;
+  el.style.left = posL(x);
+  el.style.top = posT(y);
+  traces.appendChild(el);
+}
+
+/* 便签 ×3：位置刻意不对称，压着桌沿和抽屉边 */
+const NOTES = [
+  { x: 318, y: 522, w: 56, h: 56, rot: 7 },
+  { x: 160, y: 726, w: 58, h: 58, rot: -8 },
+  { x: 352, y: 596, w: 50, h: 50, rot: -4 },
+];
+for (const n of NOTES) {
+  const el = document.createElement('div');
+  el.className = 'note';
+  el.style.left = posL(n.x);
+  el.style.top = posT(n.y);
+  el.style.width = pxw(n.w);
+  el.style.height = pxw(n.h);
+  el.style.transform = `rotate(${n.rot}deg)`;
+
+  /* 手写线：每张 2~3 行，宽窄不一，轻微倾斜 */
+  const rows = n.h > 55 ? 3 : 2;
+  for (let i = 0; i < rows; i++) {
+    const r = document.createElement('i');
+    r.style.left = '14%';
+    r.style.top = `${18 + i * 22}%`;
+    r.style.width = `${62 - i * 9}%`;
+    r.style.transform = `rotate(${i % 2 ? -0.8 : 0.6}deg)`;
+    el.appendChild(r);
+  }
+  traces.appendChild(el);
+}
+
+/* 桌沿划痕（三道，极淡） */
+for (const [x, y, w] of [[96, 466, 74], [232, 520, 58], [58, 604, 46]]) {
+  const el = document.createElement('div');
+  el.className = 'scratch';
+  el.style.left = posL(x);
+  el.style.top = posT(y);
+  el.style.width = pxw(w);
+  traces.appendChild(el);
+}
+
+/* 充电线：从手机底部出来，绕过桌面搭到桌沿外 */
+const cable = document.getElementById('cable');
+cable.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <path class="c-shadow" d="M 214 646 C 186 668, 176 690, 170 716 C 164 744, 152 772, 150 806 C 149 828, 158 848, 170 872" />
+    <path class="c-body"   d="M 214 646 C 186 668, 176 690, 170 716 C 164 744, 152 772, 150 806 C 149 828, 158 848, 170 872" />
+    <path class="c-light"  d="M 212 648 C 184 670, 174 692, 168 718 C 162 746, 150 774, 148 808 C 147 830, 156 850, 168 874" />
+  </svg>`;
+
+/* ==========================================================================
+   信纸“点火副本”：和桌面信纸同位置，但浮在暗场之上
+   ========================================================================== */
+const ignite = document.getElementById('ignite');
+const L = CONFIG.letter;
+
+/* 墙面暖光（最靠后的一层，先把“光的存在”铺出来） */
+{
+  const wash = document.createElement('div');
+  wash.className = 'ig-wallwash';
+  wash.style.left = posL(L.x - 92);
+  wash.style.top  = posT(L.y - 214);
+  wash.style.width  = pxw(L.w + 184);
+  wash.style.height = pxw(236);
+  ignite.appendChild(wash);
+}
+
+/* 光晕（比信纸大一圈） */
+for (const cls of ['ig-glow', 'ig-glow-2']) {
+  const g = document.createElement('div');
+  g.className = cls;
+  g.style.left = posL(L.x - 34);
+  g.style.top  = posT(L.y - 42);
+  g.style.width  = pxw(L.w + 68);
+  g.style.height = pxw(L.h + 84);
+  ignite.appendChild(g);
+}
+
+/* 漏在桌面的暖光（比信纸大一圈，画在信纸之前，所以是“被光照亮的桌面”） */
+{
+  const spill = document.createElement('div');
+  spill.className = 'ig-spill';
+  spill.style.left = posL(L.x - 72);
+  spill.style.top  = posT(L.y - 46);
+  spill.style.width  = pxw(L.w + 144);
+  spill.style.height = pxw(L.h + 116);
+  ignite.appendChild(spill);
+}
+
+/* 信纸本体副本（有真图就照着真图发光，没有就用占位纸） */
+let igLetter = null;
+{
+  const el = document.createElement('div');
+  el.className = 'ig-letter' + (CONFIG.assets.letter ? ' has-img' : '');
+  el.style.left = posL(L.x);
+  el.style.top  = posT(L.y);
+  el.style.width  = pxw(L.w);
+  el.style.height = pxw(L.h);
+  el.style.transform = `rotate(${L.rot}deg)`;
+  el.innerHTML = CONFIG.assets.letter
+    ? `<img src="${CONFIG.assets.letter}" alt="桌上的信">`
+    : '<i class="fiber"></i><i class="crease c1"></i><i class="crease c2"></i>' + inkMarkup('ink');
+  ignite.appendChild(el);
+  igLetter = el;
+}
+
+/* 第一幕的轻提示：轻点这封信 */
+{
+  const hint = document.createElement('div');
+  hint.className = 'tap-hint';
+  hint.textContent = CONFIG.tapHint || '轻点这封信';
+  hint.style.top = posT(L.y + L.h + 26);
+  ignite.appendChild(hint);
+}
+
+/* ==========================================================================
+   第二幕：点信纸 → 信纸飞起来、房间退到后面
+   ========================================================================== */
+const readRoot   = document.getElementById('read');
+const readSheet  = document.getElementById('read-sheet');
+const readScroll = document.getElementById('read-scroll');
+const readNext   = document.getElementById('read-next');
+const readMore   = document.getElementById('read-more');
+const stageEl    = document.querySelector('.stage');
+
+const EASE = 'cubic-bezier(.22,.68,.16,1)';
+const rectOf = (el) => el.getBoundingClientRect();
+let readOpen = false;
+let readBusy = false;
+
+/* 填充信纸内容：有照片用照片，没有就用占位纸 */
+function fillSheet() {
+  const src = CONFIG.assets.letterPage || '';
+  readScroll.innerHTML = '';
+  readScroll.scrollTop = 0;
+  readScroll.style.overflowY = src ? 'auto' : 'hidden';
+
+  if (src) {
+    const img = document.createElement('img');
+    img.className = 'read-img';
+    img.src = src;
+    img.alt = '手写的信';
+    readScroll.appendChild(img);
+  } else {
+    readScroll.innerHTML =
+      '<div class="read-paper">' +
+        '<i class="fiber"></i><i class="crease c1"></i><i class="crease c2"></i>' +
+        denseInk() +
+      '</div>';
+  }
+}
+
+/* 信纸飞起来：起点 = 桌面上那张纸的屏幕矩形，终点 = 眼前的大矩形 */
+function openRead() {
+  if (readOpen || readBusy) return;
+  readBusy = true;
+  readOpen = true;
+
+  fillSheet();
+  ACT.act = 2;
+  document.body.dataset.act = '2';
+  readNext.classList.remove('on');
+
+  const hostRect = rectOf(readRoot);
+  const start = rectOf(igLetter);
+  const vw = hostRect.width;
+  const vh = hostRect.height;
+
+  /* 先落到起点（不带过渡） */
+  readSheet.style.transition = 'none';
+  readSheet.style.left   = (start.left - hostRect.left) + 'px';
+  readSheet.style.top    = (start.top  - hostRect.top)  + 'px';
+  readSheet.style.width  = start.width + 'px';
+  readSheet.style.height = start.height + 'px';
+  readSheet.style.transform = `rotate(${L.rot}deg)`;
+
+  const hasImg = !!CONFIG.assets.letter;
+  const w = Math.round(vw * 0.86);
+  const h = hasImg
+    ? Math.round(vh * 0.72)                 // 照片：固定高度，内部可滚
+    : Math.round(Math.min(w * (L.h / L.w), vh * 0.78));
+  const left = Math.round((vw - w) / 2);
+  const top  = Math.round((vh - h) / 2 - vh * 0.02);
+
+  /* 下一帧再飞（浏览器需要一帧来记住起点） */
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      readSheet.style.transition =
+        `left 900ms ${EASE}, top 900ms ${EASE}, width 900ms ${EASE}, ` +
+        `height 900ms ${EASE}, transform 900ms ${EASE}`;
+      readSheet.style.left   = left + 'px';
+      readSheet.style.top    = top + 'px';
+      readSheet.style.width  = w + 'px';
+      readSheet.style.height = h + 'px';
+      readSheet.style.transform = 'rotate(0deg)';
+    });
+  });
+
+  /* 稍微等一下再让她看到「读完了」，像真的读完需要一点时间 */
+  setTimeout(() => {
+    readBusy = false;
+    armNext();
+  }, 1400);
+}
+
+/* 「读完了」什么时候出现：短信用等一会儿，长信要滑到底 */
+let nextTimer = 0;
+function armNext() {
+  clearTimeout(nextTimer);
+  readNext.classList.remove('on');
+  readMore.classList.remove('on');
+  readScroll.onscroll = null;
+
+  const el = readScroll;
+  const scrollable = el.scrollHeight - el.clientHeight > 24;
+  if (!scrollable) {
+    nextTimer = setTimeout(() => readNext.classList.add('on'), 1100);
+    return;
+  }
+
+  readMore.classList.add('on');
+  el.onscroll = () => {
+    if (el.scrollTop > 8) readMore.classList.remove('on');
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+      readNext.classList.add('on');
+      el.onscroll = null;
+    }
+  };
+  /* 兜底：15 秒后无论滑到哪都让她能继续，免得卡住 */
+  nextTimer = setTimeout(() => readNext.classList.add('on'), 15000);
+}
+
+/* 读完 → 收信。然后开灯（第三幕） */
+function closeRead() {
+  if (!readOpen || readBusy) return;
+  readBusy = true;
+  readNext.classList.remove('on');
+  readMore.classList.remove('on');
+  clearTimeout(nextTimer);
+
+  /* 已经开过灯的话，收信的过程中就让房间先亮起来 */
+  if (litOnce) document.body.dataset.act = '3';
+
+  const hostRect = rectOf(readRoot);
+  const start = rectOf(igLetter);
+
+  readSheet.style.transition =
+    `left 700ms ${EASE}, top 700ms ${EASE}, width 700ms ${EASE}, ` +
+    `height 700ms ${EASE}, transform 700ms ${EASE}`;
+  readSheet.style.left   = (start.left - hostRect.left) + 'px';
+  readSheet.style.top    = (start.top  - hostRect.top)  + 'px';
+  readSheet.style.width  = start.width + 'px';
+  readSheet.style.height = start.height + 'px';
+  readSheet.style.transform = `rotate(${L.rot}deg)`;
+
+  setTimeout(() => {
+    readOpen = false;
+    readBusy = false;
+    readNext.classList.remove('on');
+    if (litOnce) document.body.dataset.act = '3';
+    else { litOnce = true; startAct3(); }
+  }, 700);
+}
+
+/* 点信纸：桌面副本 + 暗场上方的一份都算 */
+for (const el of [igLetter]) {
+  el.style.pointerEvents = 'auto';
+  el.style.cursor = 'pointer';
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-label', '打开桌上的本子');
+  el.addEventListener('click', (e) => { e.stopPropagation(); openRead(); });
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRead(); }
+  });
+}
+
+readNext.addEventListener('click', (e) => { e.stopPropagation(); closeRead(); });
+
+/* ==========================================================================
+   第三幕：开灯
+   --------------------------------------------------------------------------
+   0ms 灯丝 → 120ms 光锥 → 180ms 暗场退到 .16 → 200ms 墙面暖雾
+   → 350ms 彩带（只撒这一次） → 500ms 起物件每 150ms 一件 → 900ms 照片墙亮
+   ========================================================================== */
+let litOnce = false;
+
+function startAct3() {
+  document.body.dataset.act = '3';
+
+  /* 物件一件一件浮出来（顺序：台灯→手机→信封→信→耳机→糖→相框→抽屉→杯子） */
+  const slots = Array.from(document.querySelectorAll('.slot'));
+  slots.forEach((el, i) => {
+    el.style.animation = 'slotIn 620ms var(--ease-out) both';
+    el.style.animationDelay = (480 + i * 150) + 'ms';
+  });
+
+  /* 彩带：开灯这一下，只撒一次 */
+  setTimeout(burstConfetti, 350);
+
+  /* 灯亮、撒完、物件都出来之后，房间才活 */
+  setTimeout(enterFree, 2400);
+}
+
+/* ---- 彩带：canvas 发光小纸片，120 颗（低端机 60） ---- */
+const cvs = document.getElementById('confetti');
+const cctx = cvs.getContext('2d');
+let confettiRAF = 0;
+
+function burstConfetti() {
+  const r = cvs.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = r.width, h = r.height;
+  cvs.width  = Math.round(w * dpr);
+  cvs.height = Math.round(h * dpr);
+  cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cctx.clearRect(0, 0, w, h);
+
+  const low = (navigator.hardwareConcurrency || 4) <= 4;
+  const N = low ? 60 : 120;
+  const COLORS = ['#ffd9a0', '#ffc073', '#ffd24d', '#ffe7c2', '#ffb08a', '#f6a35f'];
+  const parts = [];
+
+  /* 从信纸上方一点朝斜上方撒开，落下来正好铺满桌面和地面前景 */
+  const cx = w * 0.52, cy = h * 0.46;
+  for (let i = 0; i < N; i++) {
+    const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.1;
+    const sp  = 300 + Math.random() * 640;
+    parts.push({
+      x: cx + (Math.random() - 0.5) * w * 0.18,
+      y: cy + (Math.random() - 0.5) * h * 0.03,
+      vx: Math.cos(ang) * sp * (0.55 + Math.random() * 0.75),
+      vy: Math.sin(ang) * sp,
+      w: 3 + Math.random() * 4.5,
+      h: 6 + Math.random() * 9,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 10,
+      c: COLORS[(Math.random() * COLORS.length) | 0],
+      life: 0,
+      ttl: 3.4 + Math.random() * 0.8,
+    });
+  }
+
+  let last = performance.now();
+  const step = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    cctx.clearRect(0, 0, w, h);
+    cctx.globalCompositeOperation = 'lighter';
+
+    let alive = 0;
+    for (const p of parts) {
+      if (p.life > p.ttl) continue;
+      alive++;
+      p.life += dt;
+      p.vy += 880 * dt;                    // 重力
+      p.vx *= 1 - 1.5 * dt;                // 空气阻力
+      p.vy *= 1 - 0.55 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vr * dt;
+
+      /* 后 45% 的生命里淡出 */
+      const fade = 1 - Math.max(0, (p.life - p.ttl * 0.55) / (p.ttl * 0.45));
+      if (fade <= 0) continue;
+
+      cctx.save();
+      cctx.translate(p.x, p.y);
+      cctx.rotate(p.rot);
+      cctx.globalAlpha = fade * 0.9;
+      cctx.fillStyle = p.c;
+      /* 纸片翻转：宽度不变、高度随旋转周期变窄 */
+      cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * (0.35 + 0.65 * Math.abs(Math.cos(p.rot * 1.7))));
+      cctx.restore();
+    }
+
+    cctx.globalCompositeOperation = 'source-over';
+    if (alive) confettiRAF = requestAnimationFrame(step);
+    else cctx.clearRect(0, 0, w, h);
+  };
+
+  cancelAnimationFrame(confettiRAF);
+  confettiRAF = requestAnimationFrame(step);
+}
+
+/* ==========================================================================
+   第四幕：房间活了
+   --------------------------------------------------------------------------
+   开灯 → 撒完彩带 → 物件都浮出来，约 2.4 秒后进“随便看”的状态。
+   三样东西可以点：墙上的照片、桌上的手机、右下角的抽屉；相框也留了一句。
+   ========================================================================== */
+const freeHint = document.getElementById('free-hint');
+let freeOnce = false;
+
+function enterFree() {
+  if (freeOnce) return;
+  freeOnce = true;
+  document.body.dataset.free = '1';
+  freeHint.classList.add('on');
+  setTimeout(() => freeHint.classList.remove('on'), 4400);
+}
+
+/* ---- 通用的“一张小纸片”：抽屉里的东西、相框都用它 ---- */
+const dwrCard   = document.getElementById('dwr-card');
+const dwrPaper  = document.getElementById('dwr-card-paper');
+
+function showNote(title, body, sign, img) {
+  dwrPaper.innerHTML =
+    (img ? `<img src="${img}" alt="">` : '') +
+    `<h4>${title}</h4>` +
+    body.map((l) => `<p>${l}</p>`).join('') +
+    (sign ? `<span>${sign}</span>` : '');
+  dwrCard.classList.add('on');
+  requestAnimationFrame(() => dwrCard.classList.add('show'));
+}
+
+function hideNote() {
+  dwrCard.classList.remove('show');
+  setTimeout(() => dwrCard.classList.remove('on'), 280);
+}
+
+document.getElementById('dwr-card-backdrop').addEventListener('click', hideNote);
+
+/* ---- 照片墙：点开一张，左右翻，点空白收起 ---- */
+const lb      = document.getElementById('lb');
+const lbCard  = document.getElementById('lb-card');
+const lbCap   = document.getElementById('lb-cap');
+let lbIndex = 0, lbOpen = false;
+
+const photoCount = () => CONFIG.photos.length;
+
+function renderLb() {
+  const src = CONFIG.photos[lbIndex] || '';
+  lbCard.innerHTML = src
+    ? `<img src="${src}" alt="照片 ${lbIndex + 1}">`
+    : `<div class="lb-empty"><b>${String(lbIndex + 1).padStart(2, '0')}</b>这里放这张照片</div>`;
+  lbCap.textContent = `${lbIndex + 1} / ${photoCount()}`;
+}
+
+function openLb(i) {
+  lbIndex = ((i % photoCount()) + photoCount()) % photoCount();
+  lbOpen = true;
+  renderLb();
+  lb.classList.add('on');
+  requestAnimationFrame(() => lb.classList.add('show'));
+}
+
+function closeLb() {
+  if (!lbOpen) return;
+  lbOpen = false;
+  lb.classList.remove('show');
+  setTimeout(() => lb.classList.remove('on'), 320);
+}
+
+function stepLb(d) {
+  lbIndex = (lbIndex + d + photoCount()) % photoCount();
+  renderLb();
+}
+
+document.getElementById('lb-prev').addEventListener('click', (e) => { e.stopPropagation(); stepLb(-1); });
+document.getElementById('lb-next').addEventListener('click', (e) => { e.stopPropagation(); stepLb(1); });
+document.getElementById('lb-backdrop').addEventListener('click', closeLb);
+
+/* 左右滑：手指横着划一下就翻页 */
+{
+  let sx = 0, sy = 0, swiped = false;
+  lb.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; swiped = false; });
+  lb.addEventListener('pointermove', (e) => {
+    if (!lbOpen) return;
+    if (Math.abs(e.clientX - sx) > 36 && Math.abs(e.clientY - sy) < 64) swiped = true;
+  });
+  lb.addEventListener('pointerup', (e) => {
+    if (!lbOpen || !swiped) return;
+    stepLb(e.clientX < sx ? 1 : -1);
+  });
+}
+
+/* ---- 手机亮屏 ---- */
+const hold       = document.getElementById('hold');
+const holdScreen = document.getElementById('hold-screen');
+let holdOpen = false;
+
+function renderHold() {
+  const s = CONFIG.phoneScreen;
+  holdScreen.innerHTML =
+    `<div class="hold-time">${s.time}</div>` +
+    `<div class="hold-msg">${s.lines.map((l) => (l ? `<span>${l}</span>` : '<i></i>')).join('')}</div>` +
+    (s.sign ? `<div class="hold-sign">${s.sign}</div>` : '');
+}
+
+function openHold() {
+  holdOpen = true;
+  renderHold();
+  hold.classList.add('on');
+  requestAnimationFrame(() => hold.classList.add('show'));
+}
+
+function closeHold() {
+  if (!holdOpen) return;
+  holdOpen = false;
+  hold.classList.remove('show');
+  setTimeout(() => hold.classList.remove('on'), 300);
+}
+
+document.getElementById('hold-backdrop').addEventListener('click', closeHold);
+
+/* ---- 抽屉：拉开一条缝，里面三样东西 ---- */
+const dwr = document.getElementById('dwr');
+let dwrBuilt = false;
+
+function buildDrawer() {
+  if (dwrBuilt) return;
+  dwrBuilt = true;
+  const g = LAYOUT.drawer;
+  dwr.style.left = posL(g.x);
+  dwr.style.top = posT(g.y);
+  dwr.style.width = pxw(g.w);
+  dwr.style.height = pxw(g.h);
+
+  CONFIG.drawerItems.forEach((it) => {
+    const el = document.createElement('div');
+    el.className = `dwr-item ${it.cls}`;
+    el.style.left = pxw(it.x);
+    el.style.top = pxw(it.y);
+    el.style.width = pxw(it.w);
+    el.style.height = pxw(it.h);
+    el.style.transform = `rotate(${it.rot}deg)`;
+    el.innerHTML = '<i></i>';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showNote(it.title, it.body, it.sign, it.img);
+    });
+    dwr.appendChild(el);
+  });
+}
+
+function toggleDrawer() {
+  const open = document.body.dataset.drawer === '1';
+  if (open) {
+    document.body.dataset.drawer = '0';
+    dwr.classList.remove('show');
+    setTimeout(() => dwr.classList.remove('on'), 420);
+    return;
+  }
+  buildDrawer();
+  document.body.dataset.drawer = '1';
+  dwr.classList.add('on');
+  requestAnimationFrame(() => dwr.classList.add('show'));
+}
+
+/* ---- 把可以点的东西接上 ----
+   注意：第四幕之前点它们没有反应（开灯前房间还是“静止”的） */
+const slotOf = (k) => document.querySelector(`.slot[data-key="${k}"]`);
+
+slotOf('phone').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (document.body.dataset.free) openHold();
+});
+
+slotOf('drawer').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (document.body.dataset.free) toggleDrawer();
+});
+
+slotOf('frame').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!document.body.dataset.free) return;
+  showNote('这个相框还是空的', ['一直想放一张你的照片，', '但每一张都觉得不够好。', '等哪天你挑一张给我。'], '');
+});
+
+/* 相册：点开就是那 16 张照片，从第一张开始翻 */
+slotOf('album').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (document.body.dataset.free) openLb(0);
+});
+
+/* 照片墙：编号 01–16 对应 CONFIG.photos 的下标 */
+wallRoot.addEventListener('click', (e) => {
+  if (!document.body.dataset.free) return;
+  const s = e.target.closest('.shot');
+  if (!s) return;
+  const n = parseInt(s.dataset.label, 10);
+  if (Number.isFinite(n)) openLb(n - 1);
+});
+
+/* 键盘：Esc 收起所有浮层 */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeLb(); closeHold(); hideNote();
+});
+
+/* ==========================================================================
+   幕控制器
+   --------------------------------------------------------------------------
+   第一幕：房间是暗的，只有信亮着。台灯系统 --lamp-* 全部为 0。
+   第二幕：信捧到眼前（.read 这一层）。
+   第三、四幕：预留（开灯 / 彩带 / 自由浏览）。
+   ========================================================================== */
+const ACT = {
+  act: 1,
+  set(n) {
+    if (n === 2) { openRead(); return; }
+    if (n === 3) { litOnce = true; startAct3(); return; }
+    if (n === 4) { litOnce = true; startAct3(); enterFree(); return; }
+    this.act = n;
+    document.body.dataset.act = String(n);
+  },
+};
+window.__room = { CONFIG, LAYOUT, ACT, root: document.documentElement };
+</script>
+</body>
+</html>
