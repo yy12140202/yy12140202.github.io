@@ -86,6 +86,46 @@ body[data-act="3"] .camera{
 .cam-room{ z-index:1; }
 .cam-glow{ z-index:3; pointer-events:none; }
 
+/* --- 进门那一瞬间：夜里只亮着一盏灯 --- */
+.night-open{
+  position:fixed; inset:0; z-index:9;
+  background:#05040a;
+  overflow:hidden;
+  transition:opacity 1100ms var(--ease-soft, ease);
+}
+.night-open img{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  animation:nightDrift 18s ease-in-out both;
+}
+@keyframes nightDrift{
+  from{ transform:scale(1.06); }
+  to{ transform:scale(1); }
+}
+.night-open.gone{ opacity:0; pointer-events:none; }
+.night-cap, .night-tip{
+  position:absolute; left:0; right:0;
+  text-align:center;
+  color:#f2e4cc;
+  letter-spacing:.16em;
+  text-shadow:0 2px 18px rgba(0,0,0,.75);
+}
+.night-cap{
+  bottom:calc(var(--u) * 128);
+  font-size:calc(var(--u) * 15);
+  animation:fadeUpIn 1400ms ease 500ms both;
+}
+.night-tip{
+  bottom:calc(var(--u) * 92);
+  font-size:calc(var(--u) * 11);
+  opacity:.55;
+  animation:fadeUpIn 1400ms ease 1600ms both;
+}
+@keyframes fadeUpIn{
+  from{ opacity:0; transform:translateY(6px); }
+}
+
 /* --- 整间房那一层（第三幕用另一张机位照片，镜头“退后”其实是换图） --- */
 .cam-wide{
   z-index:2;
@@ -104,7 +144,7 @@ body[data-scene="wide"] .cam-room,
 body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, ease); }
 /* 宽景里那本小本子：站在镜子前 */
 .wide-book{
-  position:absolute; left:404px; top:486px; width:46px; height:64px;
+  position:absolute; left:385px; top:496px; width:46px; height:64px;
   transform:rotate(-2deg);
   border:0; padding:0; background:none;
   cursor:pointer;
@@ -1064,6 +1104,13 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
 <body data-act="1">
 <div class="stage">
 
+  <!-- 进门那一瞬间：夜里只亮着一盏灯（3.4 秒后自己退开，点一下也能提前进） -->
+  <div class="night-open" id="night-open">
+    <img src="assets/room-night.jpg" alt="">
+    <div class="night-cap">屋里只亮着一盏灯</div>
+    <div class="night-tip">轻点任意处</div>
+  </div>
+
   <!-- 实景房间：整张照片就是舞台，桌面物件用 3D 矩阵贴在照片的木柜台上 -->
   <div class="camera cam-room" id="cam-room">
     <img class="photo" id="photo" src="assets/room.jpg" alt="" draggable="false">
@@ -1492,6 +1539,23 @@ let igLetter = null;
     back.addEventListener('click', () => {
       document.body.dataset.scene = 'wide';
     });
+  }
+}
+
+/* 进门那一层：3.4 秒自己退开，点一下也能提前进 */
+{
+  const night = document.getElementById('night-open');
+  if (night) {
+    let gone = false;
+    const close = () => {
+      if (gone) return;
+      gone = true;
+      night.classList.add('gone');
+      setTimeout(() => night.remove(), 1500);
+    };
+    setTimeout(close, 3400);
+    night.addEventListener('click', close);
+    night.addEventListener('touchstart', close, { passive: true });
   }
 }
 
