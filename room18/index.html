@@ -86,6 +86,69 @@ body[data-act="3"] .camera{
 .cam-room{ z-index:1; }
 .cam-glow{ z-index:3; pointer-events:none; }
 
+/* --- 整间房那一层（第三幕用另一张机位照片，镜头“退后”其实是换图） --- */
+.cam-wide{
+  z-index:2;
+  width:864px; height:1152px;
+  transform:translate3d(0,0,0) scale(1);
+  transition:opacity 900ms var(--ease-soft, ease), transform 900ms var(--ease-soft, ease);
+  opacity:0;
+  pointer-events:none;
+}
+body[data-scene="wide"] .cam-wide{
+  opacity:1;
+  pointer-events:auto;
+}
+body[data-scene="wide"] .cam-room{ opacity:0; pointer-events:none; }
+body[data-scene="wide"] .cam-room,
+body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, ease); }
+/* 宽景里那本小本子：站在镜子前 */
+.wide-book{
+  position:absolute; left:404px; top:486px; width:46px; height:64px;
+  transform:rotate(-2deg);
+  border:0; padding:0; background:none;
+  cursor:pointer;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.55)) drop-shadow(0 0 18px rgba(255,196,126,.35));
+}
+.wide-book img{ display:block; width:100%; height:100%; object-fit:contain; }
+.wide-book::after{ content:''; position:absolute; inset:-14px; }
+
+/* 宽景里"走近桌上"的按钮 */
+.dive{
+  position:fixed; left:50%; bottom:calc(var(--u) * 26);
+  transform:translateX(-50%);
+  z-index:6;
+  padding:9px 18px;
+  font:inherit; font-size:13px; letter-spacing:.06em;
+  color:#f4e6cd;
+  background:rgba(28,20,14,.62);
+  border:1px solid rgba(255,214,160,.35);
+  border-radius:999px;
+  backdrop-filter:blur(6px);
+  cursor:pointer;
+  opacity:0; pointer-events:none;
+  transition:opacity 600ms ease 400ms;
+}
+body[data-scene="wide"][data-free="1"] .dive{ opacity:1; pointer-events:auto; }
+/* 宽景里别同时出现两句提示，底部只留一颗按钮 */
+body[data-scene="wide"] .free-hint{ display:none; }
+/* 桌上那一层里的"退回房间" */
+.back-wide{
+  position:fixed; left:16px; top:calc(var(--u) * 18);
+  z-index:6;
+  padding:7px 14px;
+  font:inherit; font-size:12px; letter-spacing:.06em;
+  color:#f4e6cd;
+  background:rgba(28,20,14,.55);
+  border:1px solid rgba(255,214,160,.28);
+  border-radius:999px;
+  backdrop-filter:blur(6px);
+  cursor:pointer;
+  opacity:0; pointer-events:none;
+  transition:opacity 500ms ease;
+}
+body[data-scene="desk"][data-free="1"] .back-wide{ opacity:1; pointer-events:auto; }
+
 .photo{
   position:absolute; inset:0;
   width:100%; height:100%;
@@ -1012,6 +1075,15 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
     </div>
   </div>
 
+  <!-- 第三幕的整间房：另一张机位（AI 同一房间重绘），镜头“退后”其实是这两张淡切 -->
+  <div class="camera cam-wide" id="cam-wide">
+    <img class="photo" src="assets/room-wide.jpg" alt="" draggable="false">
+    <button class="wide-book" id="wide-book" type="button" aria-label="再读一遍那个本子">
+      <img src="assets/notebook.webp" alt="">
+    </button>
+    <button class="dive" id="dive" type="button">走近桌上看看 ↓</button>
+  </div>
+
   <!-- 第一幕的暗场：盖在照片上，但信纸的光要压在它上面 -->
   <div class="mask" id="mask"></div>
 
@@ -1024,6 +1096,9 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
 
   <!-- 彩带（只在开灯那一下撒一次） -->
   <canvas class="confetti" id="confetti"></canvas>
+
+  <!-- 第三幕：在整间房和"桌上"之间切换的两颗按钮 -->
+  <button class="back-wide" id="back-wide" type="button">↖ 退回房间</button>
 
   <!-- 第二幕：把信捧到眼前 -->
   <div class="read" id="read">
@@ -1396,6 +1471,30 @@ let igLetter = null;
   ignite.appendChild(hint);
 }
 
+/* 整间房那张机位里的小本子：开灯之后还能再读一遍 */
+{
+  const wb = document.getElementById('wide-book');
+  if (wb) {
+    wb.addEventListener('click', () => openRead());
+    wb.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRead(); }
+    });
+  }
+  const dive = document.getElementById('dive');
+  if (dive) {
+    dive.addEventListener('click', () => {
+      document.body.dataset.scene = 'desk';
+      applyCamera(1);
+    });
+  }
+  const back = document.getElementById('back-wide');
+  if (back) {
+    back.addEventListener('click', () => {
+      document.body.dataset.scene = 'wide';
+    });
+  }
+}
+
 /* ==========================================================================
    第二幕：点信纸 → 信纸飞起来、房间退到后面
    ========================================================================== */
@@ -1445,7 +1544,10 @@ function openRead() {
   readNext.classList.remove('on');
 
   const hostRect = rectOf(readRoot);
-  const start = rectOf(igLetter);
+  const fromWide = document.body.dataset.scene === 'wide';
+  const start = fromWide
+    ? rectOf(document.getElementById('wide-book'))
+    : rectOf(igLetter);
   const vw = hostRect.width;
   const vh = hostRect.height;
 
@@ -1522,10 +1624,16 @@ function closeRead() {
   clearTimeout(nextTimer);
 
   /* 已经开过灯的话，收信的过程中就让房间先亮起来 */
-  if (litOnce) document.body.dataset.act = '3';
+  if (litOnce) {
+    document.body.dataset.act = '3';
+    document.body.dataset.scene = 'wide';
+  }
 
   const hostRect = rectOf(readRoot);
-  const start = rectOf(igLetter);
+  const fromWide = document.body.dataset.scene === 'wide';
+  const start = fromWide
+    ? rectOf(document.getElementById('wide-book'))
+    : rectOf(igLetter);
 
   readSheet.style.transition =
     `left 700ms ${EASE}, top 700ms ${EASE}, width 700ms ${EASE}, ` +
@@ -1599,6 +1707,19 @@ function applyCamera(zoom) {
   }
 }
 
+/* 整间房那一层：864×1152 的照片按 cover 铺满窗口 */
+const WIDE = CONFIG.wide || { size: [864, 1152] };
+function applyWide() {
+  const el = document.getElementById('cam-wide');
+  if (!el) return;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const ww = WIDE.size[0], wh = WIDE.size[1];
+  const s = Math.max(vw / ww, vh / wh);
+  const tx = (vw - ww * s) / 2;
+  const ty = (vh - wh * s) / 2;
+  el.style.transform = `translate3d(${tx.toFixed(1)}px, ${ty.toFixed(1)}px, 0) scale(${s.toFixed(4)})`;
+}
+
 /* 起手：镜头先怼在柜台上；转屏/改窗口大小时重算（第三幕之后就是整间房） */
 {
   document.getElementById('plane-props').style.setProperty('--desk-matrix', CONFIG.deskMatrix);
@@ -1606,15 +1727,18 @@ function applyCamera(zoom) {
     document.getElementById(id).style.setProperty('--desk-matrix', CONFIG.wallMatrix);
   }
   applyCamera(CAM.zoomIn);
+  applyWide();
   window.addEventListener('resize', () => {
     applyCamera(document.body.dataset.act === '3' ? 1 : CAM.zoomIn);
+    applyWide();
   });
 }
 
 /* 「读完了」的那一刻：所有东西同时动，只在这里发生一次 */
 function finishLetter() {
   document.body.dataset.act = '3';   /* 遮罩淡出 + 物件浮起，全由 CSS 接管 */
-  applyCamera(1);                    /* 镜头退回整间房（1200ms） */
+  document.body.dataset.scene = 'wide';  /* 淡切到整间房那张机位 */
+  applyCamera(1);
   burstConfetti();                   /* 彩带同一帧开始 */
   setTimeout(enterFree, 2400);       /* 落完才允许点桌上的东西 */
 }
