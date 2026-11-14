@@ -274,7 +274,7 @@ body[data-scene="desk"][data-free="1"] .back-wide{ opacity:1; pointer-events:aut
   position:absolute; inset:0;
 }
 /* 竖着的那块：本子靠着镜子站 */
-.plane-wall{ width:144px; height:184px; }
+.plane-wall{ width:132px; height:120px; }
 /* 桌面平面在镜面平面之上：本子靠着镜子站，是被前面的手机挡住的 */
 #plane-props{ z-index:2; }
 #plane-wall{ z-index:1; }
@@ -802,7 +802,7 @@ body[data-act="2"] .read-backdrop{ opacity:1; }
 }
 
 /* 第一幕：轻点这封信（很轻的一行字，不抢戏） */
-.tap-hint{
+.tap-hint{ text-shadow:0 2px 10px rgba(0,0,0,.85), 0 0 26px rgba(255,190,120,.35);
   position:absolute;
   width:100%;
   z-index:46;
@@ -818,8 +818,8 @@ body[data-act="2"] .read-backdrop{ opacity:1; }
   from{ opacity:0; transform:translateY(calc(var(--u)*5)); }
   to{ opacity:1; transform:none; }
 }
-body[data-act="2"] .tap-hint{ opacity:0; animation:none; transition:opacity 240ms linear; }
-body[data-act="3"] .tap-hint{ opacity:0; animation:none; }
+body[data-act="2"] .tap-hint{ text-shadow:0 2px 10px rgba(0,0,0,.85), 0 0 26px rgba(255,190,120,.35); opacity:0; animation:none; transition:opacity 240ms linear; }
+body[data-act="3"] .tap-hint{ text-shadow:0 2px 10px rgba(0,0,0,.85), 0 0 26px rgba(255,190,120,.35); opacity:0; animation:none; }
 
 /* 电脑端：读信时把房间外的黑也压成同一个黑，免得看见两条边 */
 body[data-act="2"]{
@@ -1304,6 +1304,7 @@ const CONFIG = {
     'matrix3d(1.35384615,0.34358974,0,0,-0.05797101,0.21739130,0,0,0,0,1,0,262.92753623,778.52173913,0,1)',
 
   /* 本子靠镜子立着的那块竖面：(0,0)-(144,184) 映射到镜子前的一小块 */
+  letterMatrix: 'matrix3d(1.35384615,0.34358974,0,0,-0.05797101,0.21739130,0,0,0,0,1,0,360.89676911,931.50635177,0,1)',
   wallMatrix:
     'matrix3d(0.93271684,-0.13516865,0,-0.00008858,-0.16050632,0.70112855,0,-0.00042633,0,0,1,0,306.00000000,752.00000000,0,1)',
 
@@ -1531,7 +1532,7 @@ for (const [key, geo] of Object.entries(LAYOUT)) {
    信纸“点火副本”：和桌面信纸同位置，但浮在暗场之上
    ========================================================================== */
 const ignite = document.getElementById('ignite');
-const LB = { w: 144, h: 184, rot: -2.5 };   /* 竖面平面的尺寸，和 .plane-wall 一致 */
+const LB = { w: 132, h: 120, rot: -2 };   /* 平躺在柜台上的本子：和 .plane-wall 一样大 */
 const bx = (v) => `${(v / LB.w) * 100}%`;
 const by = (v) => `${(v / LB.h) * 100}%`;
 const bw = (v) => `calc(var(--u) * ${v})`;
@@ -1591,7 +1592,7 @@ let igLetter = null;
   const hint = document.createElement('div');
   hint.className = 'tap-hint';
   hint.textContent = CONFIG.tapHint || '轻点这个本子';
-  hint.style.top = 'calc(100% + 18px)';
+  hint.style.top = 'calc(100% + 42px)';
   ignite.appendChild(hint);
 }
 
@@ -1870,7 +1871,7 @@ function applyWide() {
 {
   document.getElementById('plane-props').style.setProperty('--desk-matrix', CONFIG.deskMatrix);
   for (const id of ['plane-wall', 'plane-glow']) {
-    document.getElementById(id).style.setProperty('--desk-matrix', CONFIG.wallMatrix);
+    document.getElementById(id).style.setProperty('--desk-matrix', CONFIG.letterMatrix);
   }
   applyCamera(CAM.zoomIn);
   applyWide();
