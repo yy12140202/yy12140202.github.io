@@ -166,7 +166,11 @@ body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, eas
 }
 body[data-scene="wide"] .wide-bg{ opacity:1; }
 
-/* 墙上挂的两张真照片：按照片里相框的位置、角度摆，带框带影 */.wall-pic{
+/* 隐藏：整间房（AI 图）已经不用了，只保留最高清的原图 */
+.cam-wide, .wide-bg, .views, .dive, .back-wide{ display:none !important; }
+
+/* 墙上挂的两张真照片：按照片里相框的位置、角度摆，带框带影 */
+.wall-pic{
   position:absolute;
   display:block;
   object-fit:cover;
@@ -392,6 +396,9 @@ body[data-act="3"] .mask{ opacity:0; }
 }
 
 /* ---- 信纸 ---- */
+/* 开灯之前，整块桌面都能点：点桌子 = 打开本子 */
+body:not([data-act="3"]) #props{ pointer-events:auto; cursor:pointer; }
+
 .slot.letter{
   border-radius:calc(var(--u)*2.5);
   background:
@@ -1192,9 +1199,6 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
   <div class="camera cam-wide" id="cam-wide">
     <div class="wide-shot on" data-i="0">
       <img src="assets/room-wide.jpg" alt="" draggable="false">
-      <!-- 墙上那两张照片：换成你们自己的 -->
-      <img class="wall-pic" id="pic-bed" src="assets/frame-girl1.jpg" alt="">
-      <img class="wall-pic" id="pic-out" src="assets/frame-girl2.jpg" alt="">
     </div>
     <div class="wide-shot" data-i="1"><img src="assets/room-wide-2.jpg" alt="" draggable="false"></div>
     <div class="wide-shot" data-i="2"><img src="assets/room-wide-3.jpg" alt="" draggable="false"></div>
@@ -1477,6 +1481,12 @@ function denseInk() {
    物件装配
    ========================================================================== */
 const propsRoot = document.getElementById('props');
+
+/* 开灯之前：点桌上任何地方都等于点那本本子 */
+propsRoot.addEventListener('click', () => {
+  if (document.body.dataset.act === '3') return;
+  openRead();
+});
 
 for (const [key, geo] of Object.entries(LAYOUT)) {
   const el = makeSlot(key, geo, geo.layer);
@@ -1774,7 +1784,6 @@ function closeRead() {
   /* 已经开过灯的话，收信的过程中就让房间先亮起来 */
   if (litOnce) {
     document.body.dataset.act = '3';
-    document.body.dataset.scene = 'wide';
   }
 
   const hostRect = rectOf(readRoot);
@@ -1884,8 +1893,7 @@ function applyWide() {
 /* 「读完了」的那一刻：所有东西同时动，只在这里发生一次 */
 function finishLetter() {
   document.body.dataset.act = '3';   /* 遮罩淡出 + 物件浮起，全由 CSS 接管 */
-  document.body.dataset.scene = 'wide';  /* 淡切到整间房那张机位 */
-  applyCamera(1);
+  applyCamera(1);                    /* 镜头退回整张原图（最高清的那张） */
   burstConfetti();                   /* 彩带同一帧开始 */
   setTimeout(enterFree, 2400);       /* 落完才允许点桌上的东西 */
 }
