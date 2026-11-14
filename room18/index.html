@@ -161,7 +161,7 @@ body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, eas
   from{ transform:scale(1.02) translate3d(0,0,0); }
   to{ transform:scale(1.075) translate3d(-1.2%,-0.9%,0); }
 }
-/* 墙上挂的两张真照片：带上相框的样子，别像贴纸 */
+/* 墙上挂的两张真照片：按照片里相框的位置、角度摆，带框带影 */
 .wall-pic{
   position:absolute;
   display:block;
@@ -169,14 +169,39 @@ body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, eas
   box-sizing:border-box;
   border:2px solid rgba(252,243,228,.92);
   border-radius:1px;
-  filter:saturate(.94) brightness(.97) contrast(1.02);
+  filter:saturate(.94) brightness(.96) contrast(1.03);
   box-shadow:
     0 3px 8px rgba(0,0,0,.5),
     0 1px 2px rgba(0,0,0,.45),
     inset 0 0 10px rgba(110,74,40,.22);
+  transform-origin:50% 50%;
 }
-#pic-bed{ left:630px; top:433px; width:62px; height:84px; transform:rotate(1.6deg); }
-#pic-out{ left:425px; top:355px; width:55px; height:65px; transform:rotate(-1.4deg); }
+#pic-bed{ left:642px; top:438px; width:36px; height:79px; transform:rotate(-4deg); border-width:0; border-radius:0; box-shadow:0 2px 6px rgba(0,0,0,.55), inset 0 0 8px rgba(90,60,30,.3); }
+#pic-out{ left:204px; top:476px; width:50px; height:62px; transform:rotate(-1.2deg); border-width:3px; border-color:rgba(250,241,226,.95); }
+
+/* 自己选视角的三颗小按钮 */
+.views{
+  position:fixed; right:calc(var(--u) * 16); bottom:calc(var(--u) * 84);
+  z-index:6; display:flex; gap:7px;
+  opacity:0; pointer-events:none;
+  transition:opacity 500ms ease;
+}
+body[data-scene="wide"][data-free="1"] .views{ opacity:1; pointer-events:auto; }
+.view{
+  padding:6px 12px;
+  font:inherit; font-size:11.5px; letter-spacing:.08em;
+  color:#f0e0c6;
+  background:rgba(26,18,12,.55);
+  border:1px solid rgba(255,214,160,.26);
+  border-radius:999px;
+  backdrop-filter:blur(6px);
+  cursor:pointer;
+}
+.view.on{
+  color:#1d1409;
+  background:rgba(246,226,192,.92);
+  border-color:rgba(255,238,208,.9);
+}
 .wide-book{
   position:absolute; left:385px; top:496px; width:46px; height:64px;
   transform:rotate(-2deg);
@@ -1156,20 +1181,18 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
     </div>
   </div>
 
-  <!-- 第三幕的整间房：另一张机位（AI 同一房间重绘），镜头“退后”其实是这两张淡切 -->
+  <!-- 第三幕的整间房：三张机位，自己选视角（不再自动漂移） -->
   <div class="camera cam-wide" id="cam-wide">
     <div class="wide-shot on" data-i="0">
       <img src="assets/room-wide.jpg" alt="" draggable="false">
-      <!-- 墙上那两张照片：图一在床那边（62×84），图二在外面镜子旁（55×65） -->
+      <!-- 墙上那两张照片：换成你们自己的 -->
       <img class="wall-pic" id="pic-bed" src="assets/frame-girl1.jpg" alt="">
       <img class="wall-pic" id="pic-out" src="assets/frame-girl2.jpg" alt="">
     </div>
     <div class="wide-shot" data-i="1"><img src="assets/room-wide-2.jpg" alt="" draggable="false"></div>
     <div class="wide-shot" data-i="2"><img src="assets/room-wide-3.jpg" alt="" draggable="false"></div>
-    <button class="wide-book" id="wide-book" type="button" aria-label="再读一遍那个本子">
-      <img src="assets/notebook.webp" alt="">
-    </button>
-    <button class="dive" id="dive" type="button">走近桌上看看 ↓</button>
+
+
   </div>
 
   <!-- 第一幕的暗场：盖在照片上，但信纸的光要压在它上面 -->
@@ -1187,6 +1210,12 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
 
   <!-- 第三幕：在整间房和"桌上"之间切换的两颗按钮 -->
   <button class="back-wide" id="back-wide" type="button">↖ 退回房间</button>
+  <button class="dive" id="dive" type="button">走近桌上看看 ↓</button>
+  <div class="views" id="views">
+    <button class="view on" data-shot="0" type="button">屋里</button>
+    <button class="view" data-shot="1" type="button">台阶</button>
+    <button class="view" data-shot="2" type="button">门口</button>
+  </div>
 
   <!-- 第二幕：把信捧到眼前 -->
   <div class="read" id="read">
@@ -1559,15 +1588,8 @@ let igLetter = null;
   ignite.appendChild(hint);
 }
 
-/* 整间房那张机位里的小本子：开灯之后还能再读一遍 */
+/* 整间房那一层：走近桌上 / 退回房间 */
 {
-  const wb = document.getElementById('wide-book');
-  if (wb) {
-    wb.addEventListener('click', () => openRead());
-    wb.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRead(); }
-    });
-  }
   const dive = document.getElementById('dive');
   if (dive) {
     dive.addEventListener('click', () => {
@@ -1600,18 +1622,18 @@ let igLetter = null;
   }
 }
 
-/* 整间房那几张机位：每 13 秒慢慢淡切一次，像镜头在屋里缓缓移动 */
+/* 三颗视角按钮：自己选，不再自动漂移 */
 {
   const shots = Array.from(document.querySelectorAll('.wide-shot'));
-  if (shots.length > 1) {
-    let i = 0;
-    setInterval(() => {
-      if (document.body.dataset.scene !== 'wide') return;
-      shots[i].classList.remove('on');
-      i = (i + 1) % shots.length;
-      shots[i].classList.add('on');
-    }, 13000);
-  }
+  const btns = Array.from(document.querySelectorAll('.view'));
+  const show = (i) => {
+    shots.forEach((s, k) => s.classList.toggle('on', k === i));
+    btns.forEach((b, k) => b.classList.toggle('on', k === i));
+  };
+  btns.forEach((b) => b.addEventListener('click', () => show(+b.dataset.shot)));
+  /* 桌面那块区域点一下也能走近（等于按那颗按钮） */
+  const dive = document.getElementById('dive');
+  if (dive) dive.textContent = '走近桌上看看 ↓';
 }
 
 /* ==========================================================================
@@ -1663,10 +1685,7 @@ function openRead() {
   readNext.classList.remove('on');
 
   const hostRect = rectOf(readRoot);
-  const fromWide = document.body.dataset.scene === 'wide';
-  const start = fromWide
-    ? rectOf(document.getElementById('wide-book'))
-    : rectOf(igLetter);
+  const start = rectOf(igLetter);
   const vw = hostRect.width;
   const vh = hostRect.height;
 
@@ -1749,10 +1768,7 @@ function closeRead() {
   }
 
   const hostRect = rectOf(readRoot);
-  const fromWide = document.body.dataset.scene === 'wide';
-  const start = fromWide
-    ? rectOf(document.getElementById('wide-book'))
-    : rectOf(igLetter);
+  const start = rectOf(igLetter);
 
   readSheet.style.transition =
     `left 700ms ${EASE}, top 700ms ${EASE}, width 700ms ${EASE}, ` +
