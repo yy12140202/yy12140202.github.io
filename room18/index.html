@@ -143,6 +143,40 @@ body[data-scene="wide"] .cam-room{ opacity:0; pointer-events:none; }
 body[data-scene="wide"] .cam-room,
 body[data-scene="wide"] .cam-glow{ transition:opacity 900ms var(--ease-soft, ease); }
 /* 宽景里那本小本子：站在镜子前 */
+/* 整间房那一层里，几张机位慢慢淡切（缓慢漂移） */
+.wide-shot{
+  position:absolute; inset:0;
+  opacity:0;
+  transition:opacity 3400ms ease;
+}
+.wide-shot.on{ opacity:1; }
+.wide-shot img:first-child{
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+  transform-origin:50% 55%;
+  animation:driftPan 26s ease-in-out infinite alternate;
+}
+@keyframes driftPan{
+  from{ transform:scale(1.02) translate3d(0,0,0); }
+  to{ transform:scale(1.075) translate3d(-1.2%,-0.9%,0); }
+}
+/* 墙上挂的两张真照片：带上相框的样子，别像贴纸 */
+.wall-pic{
+  position:absolute;
+  display:block;
+  object-fit:cover;
+  box-sizing:border-box;
+  border:2px solid rgba(252,243,228,.92);
+  border-radius:1px;
+  filter:saturate(.94) brightness(.97) contrast(1.02);
+  box-shadow:
+    0 3px 8px rgba(0,0,0,.5),
+    0 1px 2px rgba(0,0,0,.45),
+    inset 0 0 10px rgba(110,74,40,.22);
+}
+#pic-bed{ left:630px; top:433px; width:62px; height:84px; transform:rotate(1.6deg); }
+#pic-out{ left:425px; top:355px; width:55px; height:65px; transform:rotate(-1.4deg); }
 .wide-book{
   position:absolute; left:385px; top:496px; width:46px; height:64px;
   transform:rotate(-2deg);
@@ -1124,7 +1158,14 @@ body[data-drawer="1"] .slot[data-key="drawer"]{
 
   <!-- 第三幕的整间房：另一张机位（AI 同一房间重绘），镜头“退后”其实是这两张淡切 -->
   <div class="camera cam-wide" id="cam-wide">
-    <img class="photo" src="assets/room-wide.jpg" alt="" draggable="false">
+    <div class="wide-shot on" data-i="0">
+      <img src="assets/room-wide.jpg" alt="" draggable="false">
+      <!-- 墙上那两张照片：图一在床那边（62×84），图二在外面镜子旁（55×65） -->
+      <img class="wall-pic" id="pic-bed" src="assets/frame-girl1.jpg" alt="">
+      <img class="wall-pic" id="pic-out" src="assets/frame-girl2.jpg" alt="">
+    </div>
+    <div class="wide-shot" data-i="1"><img src="assets/room-wide-2.jpg" alt="" draggable="false"></div>
+    <div class="wide-shot" data-i="2"><img src="assets/room-wide-3.jpg" alt="" draggable="false"></div>
     <button class="wide-book" id="wide-book" type="button" aria-label="再读一遍那个本子">
       <img src="assets/notebook.webp" alt="">
     </button>
@@ -1556,6 +1597,20 @@ let igLetter = null;
     setTimeout(close, 3400);
     night.addEventListener('click', close);
     night.addEventListener('touchstart', close, { passive: true });
+  }
+}
+
+/* 整间房那几张机位：每 13 秒慢慢淡切一次，像镜头在屋里缓缓移动 */
+{
+  const shots = Array.from(document.querySelectorAll('.wide-shot'));
+  if (shots.length > 1) {
+    let i = 0;
+    setInterval(() => {
+      if (document.body.dataset.scene !== 'wide') return;
+      shots[i].classList.remove('on');
+      i = (i + 1) % shots.length;
+      shots[i].classList.add('on');
+    }, 13000);
   }
 }
 
